@@ -650,20 +650,20 @@ export default function App() {
           );
         })}
 
-        {/* Sprinkler badge */}
+        {/* Sprinkler badge — centered between Ch5 and Ch9, below the wire midpoint */}
         <g>
-          <rect x={462} y={318} width={146} height={42} rx={5}
+          <rect x={462} y={420} width={146} height={42} rx={5}
             fill={calc.sprReq?"#1a0404":"#040d04"} stroke={calc.sprReq?"#ff4444":"#39ff1433"} strokeWidth={1}/>
-          <text x={535} y={332} textAnchor="middle" fill={calc.sprReq?"#ff444488":"#39ff1044"}
+          <text x={535} y={434} textAnchor="middle" fill={calc.sprReq?"#ff444488":"#39ff1044"}
             fontSize={8} fontFamily="'Courier New',monospace" letterSpacing="0.1em">NFPA 13 SPRINKLERS</text>
-          <text x={535} y={348} textAnchor="middle" fill={calc.sprReq?"#ff4444":"#39ff1066"}
+          <text x={535} y={450} textAnchor="middle" fill={calc.sprReq?"#ff4444":"#39ff1066"}
             fontSize={11} fontWeight="bold" fontFamily="'Courier New',monospace">
             {calc.sprReq?"■ REQUIRED":"□ not triggered"}
           </text>
         </g>
         <g opacity={0.4}>
-          <rect x={468} y={400} width={134} height={13} rx={2} fill="#040a04" stroke="#ffd70022" strokeWidth={1}/>
-          <text x={535} y={410} textAnchor="middle" fill="#ffd70055" fontSize={7} fontFamily="'Courier New',monospace">
+          <rect x={468} y={470} width={134} height={13} rx={2} fill="#040a04" stroke="#ffd70022" strokeWidth={1}/>
+          <text x={535} y={480} textAnchor="middle" fill="#ffd70055" fontSize={7} fontFamily="'Courier New',monospace">
             §506.3 ↔ §903.2 FEEDBACK LOOP
           </text>
         </g>
