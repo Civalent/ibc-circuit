@@ -191,14 +191,25 @@ td.p{color:var(--grn);font-weight:700} td.f{color:var(--red);font-weight:700} td
 <div id="sb">
   <div class="card">
     <div class="card-t">Project</div>
-    <div class="fg"><label>Default Occupancy</label>
+    <div class="fg"><label>Fallback Occupancy (unassigned rooms)</label>
       <select id="s-occ" onchange="onChange()">
-        <option value="B">B – Business</option><option value="A2">A-2 – Assembly/Dining</option>
-        <option value="A3">A-3 – Assembly/Other</option><option value="M" selected>M – Mercantile</option>
-        <option value="R2">R-2 – Residential Multi</option><option value="S1">S-1 – Storage Moderate</option>
-        <option value="E">E – Educational</option><option value="I2">I-2 – Institutional</option>
+        <optgroup label="Assembly"><option value="A-1">A-1 – Theater</option><option value="A-2">A-2 – Restaurant/Dining</option><option value="A-3">A-3 – Gym/Assembly/Museum</option><option value="A-4">A-4 – Indoor Sports</option><option value="A-5">A-5 – Outdoor Sports</option></optgroup>
+        <optgroup label="Other"><option value="B" selected>B – Business/Office</option><option value="E">E – Educational</option><option value="F-1">F-1 – Factory Moderate</option><option value="F-2">F-2 – Factory Low</option><option value="H">H – Hazardous</option></optgroup>
+        <optgroup label="Institutional"><option value="I-1">I-1 – Assisted Living</option><option value="I-2">I-2 – Hospital/Nursing</option><option value="I-3">I-3 – Detention</option><option value="I-4">I-4 – Daycare</option></optgroup>
+        <optgroup label="Residential/Mercantile/Storage"><option value="M">M – Mercantile/Retail</option><option value="R-1">R-1 – Hotel</option><option value="R-2">R-2 – Apartments</option><option value="R-3">R-3 – One/Two Family</option><option value="R-4">R-4 – Residential Care</option><option value="S-1">S-1 – Storage Moderate</option><option value="S-2">S-2 – Storage Low</option><option value="U">U – Utility/Misc.</option></optgroup>
+      </select>
+      <div style="font-size:.64rem;color:var(--t4);margin-top:3px;line-height:1.4">Assign occupancy per room (dbl-click → Identity tab) for accurate §508 analysis. This is only the fallback for unassigned rooms.</div>
+    </div>
+    <div class="fg"><label>§508 Occupancy Strategy</label>
+      <select id="s-occ-strategy" onchange="onChange()">
+        <option value="auto">Auto-detect from room assignments</option>
+        <option value="accessory">§508.2 – Accessory Occupancies</option>
+        <option value="nonsep">§508.3 – Non-Separated Mixed</option>
+        <option value="sep">§508.4 – Separated Mixed</option>
+        <option value="firewall">§706 – Separate Buildings (Fire Wall)</option>
       </select>
     </div>
+    <div id="occ-summary" style="margin-top:5px;padding:7px;background:var(--s2);border-radius:5px;border:1px solid var(--b1);font-size:.69rem;color:var(--t3)">Draw rooms and assign occupancies to see §508 analysis.</div>
     <div class="fg"><label>Construction Type</label>
       <select id="s-type" onchange="onChange()">
         <option value="IA">I-A (3-hr)</option><option value="IB">I-B (2-hr)</option>
@@ -289,8 +300,51 @@ td.p{color:var(--grn);font-weight:700} td.f{color:var(--red);font-weight:700} td
 </div>
 <div class="sec" id="sec-site">
   <div style="flex:1;overflow-y:auto;padding:14px">
-    <div class="stitle">🗺 Site Plan &amp; Setbacks <span class="ref">IBC §105 · Local Zoning</span></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+    <div class="stitle">🗺 Site &amp; Jurisdiction <span class="ref">IBC §105 · IECC · ASCE 7 · Local Code</span></div>
+
+    <!-- LOCATION CARD -->
+    <div class="card" style="border-left:3px solid var(--acc);margin-bottom:10px">
+      <div class="card-t" style="color:var(--acc)">📍 Project Location</div>
+      <div class="fg"><label>Street Address (optional)</label>
+        <input type="text" id="proj-addr" placeholder="e.g. 123 Main St" style="background:var(--s3);border:1px solid var(--b2);border-radius:4px;color:var(--t1);padding:6px 8px;width:100%;font-family:'JetBrains Mono',monospace;font-size:.78rem" oninput="onLocationChange()">
+      </div>
+      <div class="fg2">
+        <div class="fg"><label>City / Municipality</label>
+          <input type="text" id="proj-city" placeholder="e.g. Fort Worth" style="background:var(--s3);border:1px solid var(--b2);border-radius:4px;color:var(--t1);padding:6px 8px;width:100%;font-family:'JetBrains Mono',monospace;font-size:.78rem" oninput="onLocationChange()">
+        </div>
+        <div class="fg"><label>State</label>
+          <select id="proj-state" style="background:var(--s3);border:1px solid var(--b2);border-radius:4px;color:var(--t1);padding:6px 8px;width:100%;font-family:'JetBrains Mono',monospace;font-size:.78rem" onchange="onLocationChange()">
+            <option value="">-- State --</option>
+            <option value="AL">Alabama</option><option value="AK">Alaska</option><option value="AZ">Arizona</option>
+            <option value="AR">Arkansas</option><option value="CA">California</option><option value="CO">Colorado</option>
+            <option value="CT">Connecticut</option><option value="DE">Delaware</option><option value="FL">Florida</option>
+            <option value="GA">Georgia</option><option value="HI">Hawaii</option><option value="ID">Idaho</option>
+            <option value="IL">Illinois</option><option value="IN">Indiana</option><option value="IA">Iowa</option>
+            <option value="KS">Kansas</option><option value="KY">Kentucky</option><option value="LA">Louisiana</option>
+            <option value="ME">Maine</option><option value="MD">Maryland</option><option value="MA">Massachusetts</option>
+            <option value="MI">Michigan</option><option value="MN">Minnesota</option><option value="MS">Mississippi</option>
+            <option value="MO">Missouri</option><option value="MT">Montana</option><option value="NE">Nebraska</option>
+            <option value="NV">Nevada</option><option value="NH">New Hampshire</option><option value="NJ">New Jersey</option>
+            <option value="NM">New Mexico</option><option value="NY">New York</option><option value="NC">North Carolina</option>
+            <option value="ND">North Dakota</option><option value="OH">Ohio</option><option value="OK">Oklahoma</option>
+            <option value="OR">Oregon</option><option value="PA">Pennsylvania</option><option value="RI">Rhode Island</option>
+            <option value="SC">South Carolina</option><option value="SD">South Dakota</option><option value="TN">Tennessee</option>
+            <option value="TX" selected>Texas</option><option value="UT">Utah</option><option value="VT">Vermont</option>
+            <option value="VA">Virginia</option><option value="WA">Washington</option><option value="WV">West Virginia</option>
+            <option value="WI">Wisconsin</option><option value="WY">Wyoming</option>
+            <option value="DC">D.C.</option><option value="PR">Puerto Rico</option>
+          </select>
+        </div>
+      </div>
+      <!-- Jurisdiction summary (auto-populated) -->
+      <div id="juris-card" style="display:none;margin-top:8px;padding:9px 11px;background:var(--s2);border-radius:6px;border:1px solid var(--b1)">
+        <div style="font-size:.7rem;font-weight:700;color:var(--acc);margin-bottom:5px">🏛 Jurisdiction &amp; Code Data</div>
+        <div id="juris-body"></div>
+      </div>
+    </div>
+
+    <!-- LOT + SETBACKS -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div class="card">
         <div class="card-t">Lot Geometry</div>
         <div class="fg2">
@@ -299,10 +353,8 @@ td.p{color:var(--grn);font-weight:700} td.f{color:var(--red);font-weight:700} td
         </div>
         <div class="fg"><label>Public Street Side</label>
           <select id="lot-street" onchange="updateSite();renderAll()">
-            <option value="S" selected>South (bottom)</option>
-            <option value="N">North (top)</option>
-            <option value="E">East (right)</option>
-            <option value="W">West (left)</option>
+            <option value="S" selected>South (bottom)</option><option value="N">North (top)</option>
+            <option value="E">East (right)</option><option value="W">West (left)</option>
           </select>
         </div>
       </div>
@@ -334,12 +386,62 @@ td.p{color:var(--grn);font-weight:700} td.f{color:var(--red);font-weight:700} td
     <div class="card"><div class="card-t">Lot Coverage Analysis</div><div id="site-cov-body"></div></div>
   </div>
 </div>
+v>
 <div class="sec" id="sec-circuit">
   <div style="flex:1;overflow-y:auto;padding:14px">
     <div class="stitle">⚡ IBC Egress Circuit <span class="ref">§1003–§1028</span></div>
     <div id="led-wrap"><div style="font-family:'Syne',sans-serif;font-weight:700;font-size:.75rem;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;gap:8px">LED Circuit<span id="circuit-status" class="bdg b">—</span></div><canvas id="led-canvas" height="240"></canvas></div>
     <div id="zone-wrap"><div style="font-family:'Syne',sans-serif;font-weight:700;font-size:.75rem;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">IBC Ch.10 Egress Path</div><canvas id="zone-canvas" height="440"></canvas></div>
     <div class="card"><div class="card-t">Circuit Reference</div><div class="tw"><table><thead><tr><th>Component</th><th>§</th><th>Max Dist</th><th>Rating</th><th>Status</th></tr></thead><tbody id="ctbl"></tbody></table></div></div>
+  </div>
+</div>
+<div class="sec" id="sec-comp">
+  <div style="flex:1;overflow-y:auto;padding:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div class="stitle" style="margin-bottom:0">✅ IBC Compliance — All Floors <span class="ref">IBC 2021 · Ch.3–16</span></div>
+      <button class="tbtn on" style="background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border:none;padding:6px 14px;font-size:.75rem;border-radius:5px;cursor:pointer" onclick="runCheck();setTimeout(runFullComplianceCheck,100)">▶ Run Full Check</button>
+    </div>
+    <div id="full-check-results" style="margin-bottom:12px"></div>
+    <div id="comp-body"></div>
+  </div>
+</div>
+<div class="sec" id="sec-alts">
+  <div style="flex:1;overflow-y:auto;padding:14px">
+    <div class="stitle">💡 Code Alternatives &amp; Cost Paths <span class="ref">IBC 2021 §104·§506·§706·§903·§508</span></div>
+    <div id="alts-body"></div>
+  </div>
+</div>
+<div class="sec" id="sec-chat" style="flex-direction:column">
+  <div style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px" id="chat-messages">
+    <div style="background:var(--s3);border:1px solid var(--b1);border-radius:8px;padding:10px 12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:.8rem;color:var(--acc)">🤖 IBC Code Assistant</div>
+      <button onclick="clearChat()" style="font-size:.65rem;padding:2px 8px;border-radius:4px;background:var(--s3);border:1px solid var(--b2);color:var(--t4);cursor:pointer">Clear</button>
+    </div>
+      <div style="font-size:.75rem;color:var(--t2);line-height:1.6">Ask me about your project's IBC compliance. I have full context of your floor plan, occupancies, construction type, sprinkler status, and code check results.<br>Examples: "Do I need a sprinkler?", "What §508 path is cheapest?", "Can I change to V-B?", "What does my restaurant require?"</div>
+    </div>
+  </div>
+  <div style="padding:10px 14px;border-top:1px solid var(--b1);background:var(--s1);flex-shrink:0">
+    <div style="display:flex;gap:8px;align-items:flex-end">
+      <textarea id="chat-input" rows="2" placeholder="Ask about your IBC compliance..." style="flex:1;background:var(--s3);border:1px solid var(--b2);border-radius:6px;color:var(--t1);padding:8px 10px;font-family:'JetBrains Mono',monospace;font-size:.78rem;resize:none;outline:none;line-height:1.5" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
+      <button class="tbtn on" style="padding:8px 14px;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.8rem;white-space:nowrap" onclick="sendChat()">Send ↵</button>
+    </div>
+    <div style="font-size:.62rem;color:var(--t4);margin-top:4px;font-family:'JetBrains Mono',monospace">Shift+Enter = newline · Enter = send · Context: your floor plan + compliance</div>
+  </div>
+</div>
+<div class="sec" id="sec-circuit-b" style="background:#040a04">
+  <div id="circuit-b-root" style="flex:1;overflow:hidden;display:flex;flex-direction:column;height:100%;width:100%">
+    <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#39ff1044;font-family:'JetBrains Mono',monospace;font-size:.8rem">Loading Circuit Analyzer...</div>
+  </div>
+</div>
+</div></div>
+<div id="mov"><div id="mdl">
+  <div id="mdl-t">Edit</div><div id="mdl-body"></div>
+  <div id="mdl-act"><button class="tbtn" onclick="closeModal()">Cancel</button><button class="tbtn on" onclick="saveModal()">Save</button></div>
+</div></div>
+
+
+th>Rating</th><th>Status</th></tr></thead><tbody id="ctbl"></tbody></table></div></div>
   </div>
 </div>
 <div class="sec" id="sec-comp">
@@ -428,16 +530,37 @@ const IBC={
   // §Table 601 — Construction type labels
   ctLabel:{IA:'I-A (3-hr)',IB:'I-B (2-hr)',IIA:'II-A (1-hr)',IIB:'II-B (0-hr)',IIIA:'III-A',IIIB:'III-B',VA:'V-A (1-hr)',VB:'V-B (0-hr)'},
   // §Table 508.4 — Separation hours between occupancies
+  // §Table 508.4 — Required separation (hr) between occupancy groups
+  // Full IBC 2021 Table 508.4 (NS=not separated, values=hr rating required)
+  // Keys use canonical group names matching s-occ values
   sepTable:{
-    B:  {A2:1,A3:1,M:1,R2:2,S1:2,E:1,I2:2},
-    A2: {B:1,A3:0,M:1,R2:2,S1:2,E:1,I2:2},
-    A3: {B:1,A2:0,M:1,R2:2,S1:2,E:1,I2:2},
-    M:  {B:1,A2:1,A3:1,R2:2,S1:1,E:1,I2:2},
-    R2: {B:2,A2:2,A3:2,M:2,S1:2,E:2,I2:2},
-    S1: {B:2,A2:2,A3:2,M:1,R2:2,E:2,I2:2},
-    E:  {B:1,A2:1,A3:1,M:1,R2:2,S1:2,I2:2},
-    I2: {B:2,A2:2,A3:2,M:2,R2:2,S1:2,E:2}
+    'A-1':{'A-2':1,'A-3':1,'A-4':1,'A-5':1,'B':1,'E':1,'F-1':2,'F-2':1,'H':NaN,'I-1':1,'I-2':2,'I-3':3,'I-4':2,'M':1,'R-1':1,'R-2':2,'R-3':2,'R-4':2,'S-1':2,'S-2':1,'U':1},
+    'A-2':{'A-1':1,'A-3':1,'A-4':1,'A-5':1,'B':1,'E':1,'F-1':2,'F-2':1,'I-1':1,'I-2':2,'I-3':3,'I-4':2,'M':1,'R-1':1,'R-2':2,'R-3':2,'R-4':2,'S-1':2,'S-2':1,'U':1},
+    'A-3':{'A-1':1,'A-2':1,'A-4':1,'A-5':1,'B':1,'E':1,'F-1':2,'F-2':1,'I-1':1,'I-2':2,'I-3':3,'I-4':2,'M':1,'R-1':1,'R-2':2,'R-3':2,'R-4':2,'S-1':2,'S-2':1,'U':1},
+    'A-4':{'A-1':1,'A-2':1,'A-3':1,'A-5':1,'B':1,'E':1,'F-1':2,'F-2':1,'I-1':1,'I-2':2,'I-3':3,'I-4':2,'M':1,'R-1':1,'R-2':2,'R-3':2,'R-4':2,'S-1':2,'S-2':1,'U':1},
+    'B':  {'A-1':1,'A-2':1,'A-3':1,'A-4':1,'A-5':1,'E':1,'F-1':2,'F-2':1,'I-1':1,'I-2':2,'I-3':2,'I-4':1,'M':1,'R-1':1,'R-2':2,'R-3':2,'R-4':2,'S-1':2,'S-2':1,'U':1},
+    'E':  {'A-1':1,'A-2':1,'A-3':1,'A-4':1,'B':1,'F-1':2,'F-2':1,'I-1':1,'I-2':2,'I-3':3,'I-4':1,'M':1,'R-1':1,'R-2':2,'R-3':2,'R-4':2,'S-1':2,'S-2':1,'U':1},
+    'F-1':{'A-1':2,'A-2':2,'A-3':2,'A-4':2,'B':2,'E':2,'F-2':1,'I-1':2,'I-2':2,'I-3':2,'I-4':2,'M':2,'R-1':2,'R-2':3,'R-3':2,'R-4':2,'S-1':1,'S-2':1,'U':1},
+    'F-2':{'A-1':1,'A-2':1,'A-3':1,'A-4':1,'B':1,'E':1,'F-1':1,'I-1':1,'I-2':2,'I-3':2,'I-4':1,'M':1,'R-1':1,'R-2':2,'R-3':1,'R-4':1,'S-1':1,'S-2':1,'U':1},
+    'I-1':{'A-1':1,'A-2':1,'A-3':1,'A-4':1,'B':1,'E':1,'F-1':2,'F-2':1,'I-2':2,'I-3':2,'I-4':1,'M':1,'R-1':1,'R-2':2,'R-3':1,'R-4':1,'S-1':2,'S-2':1,'U':1},
+    'I-2':{'A-1':2,'A-2':2,'A-3':2,'A-4':2,'B':2,'E':2,'F-1':2,'F-2':2,'I-1':2,'I-3':2,'I-4':2,'M':2,'R-1':2,'R-2':2,'R-3':2,'R-4':2,'S-1':2,'S-2':2,'U':2},
+    'I-3':{'A-1':3,'A-2':3,'A-3':3,'A-4':3,'B':2,'E':3,'F-1':2,'F-2':2,'I-1':2,'I-2':2,'I-4':2,'M':2,'R-1':2,'R-2':2,'R-3':2,'R-4':2,'S-1':2,'S-2':2,'U':2},
+    'I-4':{'A-1':2,'A-2':2,'A-3':2,'A-4':2,'B':1,'E':1,'F-1':2,'F-2':1,'I-1':1,'I-2':2,'I-3':2,'M':1,'R-1':1,'R-2':2,'R-3':1,'R-4':1,'S-1':2,'S-2':1,'U':1},
+    'M':  {'A-1':1,'A-2':1,'A-3':1,'A-4':1,'B':1,'E':1,'F-1':2,'F-2':1,'I-1':1,'I-2':2,'I-3':2,'I-4':1,'R-1':1,'R-2':2,'R-3':1,'R-4':1,'S-1':2,'S-2':1,'U':1},
+    'R-1':{'A-1':1,'A-2':1,'A-3':1,'A-4':1,'B':1,'E':1,'F-1':2,'F-2':1,'I-1':1,'I-2':2,'I-3':2,'I-4':1,'M':1,'R-2':1,'R-3':1,'R-4':1,'S-1':2,'S-2':1,'U':1},
+    'R-2':{'A-1':2,'A-2':2,'A-3':2,'A-4':2,'B':2,'E':2,'F-1':3,'F-2':2,'I-1':2,'I-2':2,'I-3':2,'I-4':2,'M':2,'R-1':1,'R-3':1,'R-4':1,'S-1':2,'S-2':2,'U':1},
+    'R-3':{'A-1':2,'A-2':2,'A-3':2,'A-4':2,'B':2,'E':2,'F-1':2,'F-2':1,'I-1':1,'I-2':2,'I-3':2,'I-4':1,'M':1,'R-1':1,'R-2':1,'R-4':1,'S-1':2,'S-2':1,'U':1},
+    'R-4':{'A-1':2,'A-2':2,'A-3':2,'A-4':2,'B':2,'E':2,'F-1':2,'F-2':1,'I-1':1,'I-2':2,'I-3':2,'I-4':1,'M':1,'R-1':1,'R-2':1,'R-3':1,'S-1':2,'S-2':1,'U':1},
+    'S-1':{'A-1':2,'A-2':2,'A-3':2,'A-4':2,'B':2,'E':2,'F-1':1,'F-2':1,'I-1':2,'I-2':2,'I-3':2,'I-4':2,'M':2,'R-1':2,'R-2':2,'R-3':2,'R-4':2,'S-2':1,'U':1},
+    'S-2':{'A-1':1,'A-2':1,'A-3':1,'A-4':1,'B':1,'E':1,'F-1':1,'F-2':1,'I-1':1,'I-2':2,'I-3':2,'I-4':1,'M':1,'R-1':1,'R-2':2,'R-3':1,'R-4':1,'S-1':1,'U':1},
+    'U':  {'A-1':1,'A-2':1,'A-3':1,'A-4':1,'B':1,'E':1,'F-1':1,'F-2':1,'I-1':1,'I-2':2,'I-3':2,'I-4':1,'M':1,'R-1':1,'R-2':1,'R-3':1,'R-4':1,'S-1':1,'S-2':1},
   },
+  // §508.2.1 — Accessory threshold (10% of floor area, max 1000 SF for H)
+  accessoryMaxPct: 0.10,
+  // OLF map for all groups
+  olfFull:{'A-1':15,'A-2':15,'A-3':15,'A-4':15,'A-5':15,'B':100,'E':20,'F-1':200,'F-2':200,'H':25,'I-1':105,'I-2':240,'I-3':240,'I-4':35,'M':60,'R-1':200,'R-2':200,'R-3':300,'R-4':200,'S-1':300,'S-2':300,'U':300},
+  // §303 canonical group labels
+  occLabels:{'A-1':'Assembly-Theater','A-2':'Assembly-Dining','A-3':'Assembly-Other','A-4':'Assembly-Sports','A-5':'Assembly-Outdoor','B':'Business','E':'Educational','F-1':'Factory-Mod','F-2':'Factory-Low','H':'Hazardous','I-1':'Institutional-1','I-2':'Institutional-2','I-3':'Detention','I-4':'Daycare','M':'Mercantile','R-1':'Hotel','R-2':'Residential','R-3':'Single-Family','R-4':'Res.Care','S-1':'Storage-Mod','S-2':'Storage-Low','U':'Utility'},
   // §§1009.4, ADA §206.2.3 — Elevator
   elevRequired(floors,sfPF){if(floors<=1)return false;if(floors===2&&sfPF<3000)return false;return true;},
   // §1011 stair dims
@@ -512,7 +635,7 @@ const F=()=>S.floors[S.floor];
 const px=v=>v*S.scale;
 const ft=v=>v/S.scale;
 const snap=v=>{const g=S.gridFt*S.scale;return Math.round(v/g)*g;};
-const occ=()=>document.getElementById('s-occ')?.value||'M';
+const occ=()=>document.getElementById('s-occ')?.value||'B';
 const type=()=>document.getElementById('s-type')?.value||'IIB';
 const spr=()=>document.getElementById('s-spr')?.value==='nfpa13';
 const ol=(sf,o)=>Math.ceil(sf/(IBC.olf[o]?.f||150));
@@ -526,7 +649,137 @@ function detectRoomType(label){
   }
   return null;
 }
-// Detect incidental uses from room name (§Table 509)
+// ── §303/§508/§706 OCCUPANCY DETERMINATION ENGINE ──────────────────────────
+// Step 1: effective occupancy of each room
+function getRoomEffectiveOcc(room, fallbackOcc){
+  if(room.occ) return room.occ;
+  const auto=detectRoomType(room.label);
+  if(auto) return auto;
+  return fallbackOcc;
+}
+
+// Step 2: classify each room vs floor area → determine if accessory (§508.2)
+function classifyFloorOccupancies(floorEls, fallbackOcc){
+  const rooms=floorEls.filter(e=>e.type==='room');
+  const totalSF=rooms.reduce((t,r)=>t+Math.round(ft(r.w)*ft(r.h)),0);
+  // Group by occupancy
+  const groups={};
+  rooms.forEach(r=>{
+    const o=getRoomEffectiveOcc(r,fallbackOcc);
+    if(!groups[o]) groups[o]={occ:o,sf:0,rooms:[]};
+    groups[o].sf+=Math.round(ft(r.w)*ft(r.h));
+    groups[o].rooms.push(r);
+  });
+  // Determine dominant (largest SF)
+  const sorted=Object.values(groups).sort((a,b)=>b.sf-a.sf);
+  const dominant=sorted[0]?.occ||fallbackOcc;
+  // Mark accessories: ≤10% of total floor SF AND not primary (§508.2.1)
+  sorted.forEach(g=>{
+    const pct=totalSF>0?g.sf/totalSF:0;
+    g.pct=pct;
+    g.isAccessory = g.occ!==dominant && pct<=0.10;
+    g.isPrimary   = g.occ===dominant;
+  });
+  return{groups:sorted,dominant,totalSF,uniqueOccs:[...new Set(sorted.map(g=>g.occ))]};
+}
+
+// Step 3: determine project-level occupancy strategy
+function determineOccStrategy(){
+  const strategy=document.getElementById('s-occ-strategy')?.value||'auto';
+  const fallback=occ(); // s-occ value
+  const allRooms=S.floors.flatMap(f=>f.els.filter(e=>e.type==='room'));
+  const totalProjectSF=S.floors.reduce((t,f)=>t+floorSF(f),0);
+  // Collect all unique occupancies across project
+  const allOccs=[...new Set(allRooms.map(r=>getRoomEffectiveOcc(r,fallback)).filter(Boolean))];
+  // Check for fire walls (§706) — each side becomes separate fire area
+  const hasFW=S.floors.some(f=>f.els.some(e=>e.type==='fw'&&(e.rating||3)>=3));
+  const hasFireBarrier=S.floors.some(f=>f.els.some(e=>e.type==='fw'&&(e.rating||3)===2));
+  // Determine effective strategy
+  let effectiveStrategy=strategy;
+  if(strategy==='auto'){
+    if(allOccs.length<=1) effectiveStrategy='single';
+    else if(hasFW)        effectiveStrategy='firewall';
+    else                  effectiveStrategy='mixed-detect'; // need to choose
+  }
+  // Per-floor classification
+  const floorClassifications=S.floors.map(f=>classifyFloorOccupancies(f.els,fallback));
+  // Project-level classification
+  const projectGroups={};
+  allRooms.forEach(r=>{
+    const o=getRoomEffectiveOcc(r,fallback);
+    if(!projectGroups[o]) projectGroups[o]={occ:o,sf:0,rooms:[],label:IBC.occLabels?.[o]||o};
+    projectGroups[o].sf+=Math.round(ft(r.w)*ft(r.h));
+    projectGroups[o].rooms.push(r);
+  });
+  const sortedGroups=Object.values(projectGroups).sort((a,b)=>b.sf-a.sf);
+  const dominant=sortedGroups[0]?.occ||fallback;
+  // Mark accessories
+  sortedGroups.forEach(g=>{
+    const pct=totalProjectSF>0?g.sf/totalProjectSF:0;
+    g.pct=Math.round(pct*100);
+    g.isAccessory=g.occ!==dominant&&pct<=0.10;
+    g.isPrimary=g.occ===dominant;
+  });
+  // Build §Table 508.4 separation pairs (for non-primary, non-accessory groups)
+  const significant=sortedGroups.filter(g=>!g.isAccessory);
+  const pairs=[];
+  for(let i=0;i<significant.length;i++) for(let j=i+1;j<significant.length;j++){
+    const a=significant[i].occ,b=significant[j].occ;
+    const hr=(IBC.sepTable[a]||{})[b]||(IBC.sepTable[b]||{})[a]||1;
+    pairs.push({a,b,hr,ref:'§Table 508.4'});
+  }
+  const maxHr=pairs.length?Math.max(...pairs.map(p=>p.hr)):0;
+  // Most restrictive provisions for nonseparated
+  const mostRestrictiveOLF=allOccs.length?Math.min(...allOccs.map(o=>IBC.olfFull?.[o]||IBC.olf?.[o]?.f||100)):100;
+  return{
+    strategy:effectiveStrategy,userStrategy:strategy,
+    allOccs,sortedGroups,dominant,pairs,maxHr,
+    hasFW,hasFireBarrier,
+    significant,
+    mostRestrictiveOLF,
+    floorClassifications,
+    totalProjectSF,
+    isSingle:allOccs.length<=1,
+    isMixed:significant.length>1,
+  };
+}
+
+// Step 4: update sidebar occupancy summary
+function updateOccSummary(){
+  const el=document.getElementById('occ-summary');if(!el)return;
+  const str=determineOccStrategy();
+  if(str.allOccs.length===0){el.innerHTML='Draw rooms and assign occupancies to see analysis.';return;}
+  const strategyLabels={
+    'single':'Single Occupancy',
+    'firewall':'§706 Separate Buildings by Fire Wall',
+    'nonsep':'§508.3 Non-Separated Mixed',
+    'sep':'§508.4 Separated Mixed',
+    'accessory':'§508.2 Accessory Occupancies',
+    'mixed-detect':'Mixed — choose strategy in §508 field',
+    'auto':'Auto-detected',
+  };
+  const statusColor=str.isMixed&&str.userStrategy==='auto'?'var(--amb)':str.hasFW?'var(--acc)':'var(--grn)';
+  el.innerHTML=`
+    <div style="font-weight:700;color:${statusColor};margin-bottom:5px;font-size:.72rem">
+      ${str.isSingle?'✓ Single Occupancy: '+str.allOccs[0]:str.hasFW?'§706 Separate Buildings':str.isMixed?'⚑ Mixed Occupancy Building':'Single Occupancy'}
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px;margin-bottom:5px">
+      ${str.sortedGroups.map(g=>`<div style="display:flex;align-items:center;gap:5px">
+        <div style="width:7px;height:7px;border-radius:50%;background:${occColorMap(g.occ)||'var(--t4)'};flex-shrink:0"></div>
+        <span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${occColorMap(g.occ)||'var(--t2)'};">${g.occ}</span>
+        <span style="color:var(--t3)">${g.sf.toLocaleString()} SF (${g.pct}%)</span>
+        ${g.isAccessory?'<span style="color:var(--t4);font-size:.62rem">accessory §508.2</span>':g.isPrimary?'<span style="color:var(--t4);font-size:.62rem">dominant</span>':''}
+      </div>`).join('')}
+    </div>
+    ${str.isMixed&&str.pairs.length?`<div style="font-size:.66rem;color:var(--t4);margin-top:3px">
+      §Table 508.4 separations: ${str.pairs.map(p=>`${p.a}/${p.b}=${p.hr}hr`).join(' · ')}
+    </div>`:''}
+    ${str.hasFW?`<div style="font-size:.66rem;color:var(--acc);margin-top:3px">§706 Fire Wall → resets area/height limits per side</div>`:''}
+    ${str.isMixed&&str.userStrategy==='auto'?`<div style="font-size:.66rem;color:var(--amb);margin-top:3px">⚑ Select §508 strategy above for compliance analysis</div>`:''}
+  `;
+}
+
+// Detect incidental uses from room name (§Table 509)// Detect incidental uses from room name (§Table 509)
 function detectIncidentalUse(label){
   if(!label) return null;
   const n=label.toLowerCase();
@@ -1164,12 +1417,16 @@ function rmFloor(i){
   S.floors.splice(i,1);if(S.floor>=S.floors.length)S.floor=S.floors.length-1;
   saveHist();buildFloorTabs();buildFList();renderAll();updateEL();updateStats();
 }
-function onChange(){S.scale=+(document.getElementById('s-scale')?.value||4);S.gridFt=+(document.getElementById('s-grid')?.value||5);updateStats();renderAll();}
+function onChange(){S.scale=+(document.getElementById('s-scale')?.value||4);S.gridFt=+(document.getElementById('s-grid')?.value||5);updateStats();updateOccSummary();renderAll();}
 function updateStats(){
   const el=document.getElementById('stats');if(!el)return;
   const sp=spr(),f=F(),sf=floorSF(f),floors=S.floors.length;
   const rooms=f.els.filter(e=>e.type==='room');
   const roomOccs=[...new Set(rooms.map(r=>r.occ||(detectRoomType(r.label))||occ()).filter(Boolean))];
+  // Update jurisdiction mini badge
+  updateOccSummary();
+  const jm=document.getElementById('juris-mini');
+  if(jm){const jj=getJurisdiction();jm.textContent=jj.city?(jj.label+' · IECC '+jj.cz+' · Wind '+jj.wind+'mph'):'';}
   el.innerHTML=`<div class="sgrid">
     <div class="sbox2 ${sf>0?'gs':''}"><div class="sv">${sf>=1000?(sf/1000).toFixed(1)+'k':sf}</div><div class="sl">SF/Floor</div></div>
     <div class="sbox2"><div class="sv">${ol(sf,occ())}</div><div class="sl">Occ. Load</div></div>
@@ -1463,6 +1720,320 @@ function rmTab(id){
 // ══════════════════════════════════════════════════
 // SITE PLAN
 // ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════
+// JURISDICTION DATABASE
+// State → {ibcEdition, ieccEdition, climateZones, windSpeed, seismic,
+//           adoptionNotes, amendmentNotes}
+// IECC climate zones from IECC 2021 Table C301.1
+// Wind speeds from ASCE 7-22 (3-sec gust, Risk Cat II)
+// ══════════════════════════════════════════════════════════════════════
+const JURIS_DB = {
+  // Keys: state abbreviation, with major city overrides
+  TX:{ibc:'IBC 2021',iecc:'IECC 2021',
+    zones:{default:'2B/3A',cities:{'fort worth':'3A','dallas':'3A','houston':'2A','austin':'2A','san antonio':'2A','el paso':'3B','lubbock':'3B','amarillo':'4B','midland':'3B','odessa':'3B','abilene':'3A','waco':'3A','tyler':'3A','beaumont':'2A','corpus christi':'2A','laredo':'2A','mcallen':'1A','brownsville':'1A','wichita falls':'3A','longview':'3A','college station':'2A','killeen':'3A'}},
+    wind:{default:115,cities:{'houston':130,'beaumont':130,'corpus christi':140,'galveston':150,'port arthur':135,'victoria':130,'brownsville':140,'mcallen':125}},
+    seismic:{default:'A/B',cities:{}},
+    adoptionNotes:'Texas adopts IBC with local amendments. Cities/counties adopt independently. Check local jurisdiction amendments.',
+    amendmentNotes:'TX Dept of Insurance windstorm requirements apply in Tier 1/2 coastal counties. TAS (Texas Accessibility Standards) applies instead of ADA for state-funded projects.'},
+  CA:{ibc:'CBC 2022 (based on IBC 2021)',iecc:'CEnC 2022',
+    zones:{default:'3C',cities:{'los angeles':'3B','san francisco':'3C','san diego':'3C','sacramento':'3B','fresno':'3B','bakersfield':'3B','stockton':'3B','riverside':'3B','san jose':'3C','san bernardino':'3B','long beach':'3B','anaheim':'3B','santa ana':'3B','chula vista':'3C','irvine':'3C'}},
+    wind:{default:110,cities:{'los angeles':110,'san francisco':110}},
+    seismic:{default:'D/E',cities:{'los angeles':'D2','san francisco':'D2','oakland':'D2'}},
+    adoptionNotes:'California uses its own CBC — significant amendments to IBC. DSA (Div. of State Architect) regulates schools/hospitals.',
+    amendmentNotes:'Title 24 energy code is stricter than IECC. California Green Building Code (CALGreen) applies. OSHPD for healthcare.'},
+  FL:{ibc:'FBC 8th Ed. (based on IBC 2021)',iecc:'FECC 2023',
+    zones:{default:'2A',cities:{'miami':'1A','fort lauderdale':'1A','west palm beach':'1A','orlando':'2A','tampa':'2A','jacksonville':'2A','tallahassee':'2A','gainesville':'2A','pensacola':'2A','key west':'1A','naples':'1A','fort myers':'1A','sarasota':'2A'}},
+    wind:{default:140,cities:{'miami':175,'key west':180,'fort lauderdale':175,'west palm beach':165,'naples':160,'fort myers':155,'tampa':145,'orlando':135,'jacksonville':130,'pensacola':140}},
+    seismic:{default:'A',cities:{}},
+    adoptionNotes:'Florida Building Code — statewide uniform adoption. High-velocity hurricane zones (HVHZ) in Miami-Dade and Broward counties have additional wind requirements.',
+    amendmentNotes:'HVHZ requires NOA (Notice of Acceptance) for building products. Florida has mandatory wind load provisions per FBC Ch.16.'},
+  NY:{ibc:'2022 NYSBC (IBC 2018 base)',iecc:'NYSECC 2020',
+    zones:{default:'5A',cities:{'new york city':'4A','nyc':'4A','buffalo':'6A','rochester':'6A','albany':'5A','syracuse':'6A','utica':'6A','binghamton':'6A','long island':'4A','brooklyn':'4A','queens':'4A','bronx':'5A','staten island':'4A'}},
+    wind:{default:115,cities:{'new york city':120,'long island':120}},
+    seismic:{default:'B',cities:{'new york city':'B'}},
+    adoptionNotes:'NYC has its own Building Code (NYC BC) — significant departures from IBC. Upstate NY uses 2022 NYSBC.',
+    amendmentNotes:'NYC: DOB approval required. Landmarks: LPC review. NYC energy code (NYCECC) stricter than IECC.'},
+  IL:{ibc:'IBC 2021',iecc:'IECC 2021',
+    zones:{default:'5A',cities:{'chicago':'5A','aurora':'5A','naperville':'5A','joliet':'5A','rockford':'5A','springfield':'5A','peoria':'5A'}},
+    wind:{default:115,cities:{}},
+    seismic:{default:'A/B',cities:{'chicago':'A'}},
+    adoptionNotes:'Illinois does not have a statewide building code. Chicago has its own code (based on IBC 2018). Other municipalities adopt independently.',
+    amendmentNotes:'Chicago: Dept of Buildings. Illinois Plumbing Code applies statewide. Chicago zoning is complex — verify with Dept of Planning.'},
+  WA:{ibc:'IBC 2021',iecc:'IECC 2021',
+    zones:{default:'4C',cities:{'seattle':'4C','spokane':'5B','tacoma':'4C','vancouver':'4C','bellevue':'4C','kent':'4C','everett':'5B','renton':'4C'}},
+    wind:{default:110,cities:{'seattle':110,'coastal':130}},
+    seismic:{default:'C/D',cities:{'seattle':'D2','tacoma':'D2'}},
+    adoptionNotes:'Washington State Building Code adopted statewide. Local amendments allowed. Seattle has own amendments.',
+    amendmentNotes:'WSBCC (Washington State Building Code Council) updates. Seattle: SMC amendments. High seismic zone — verify SDC with geotechnical engineer.'},
+  OR:{ibc:'OSSC 2021 (IBC 2021 base)',iecc:'OEESC 2021',
+    zones:{default:'4C',cities:{'portland':'4C','eugene':'4C','salem':'4C','gresham':'4C','hillsboro':'4C','bend':'6B','medford':'3B'}},
+    wind:{default:110,cities:{'portland':110,'coastal':130}},
+    seismic:{default:'C/D',cities:{'portland':'D1'}},
+    adoptionNotes:'Oregon Structural Specialty Code (OSSC) — statewide adoption with amendments. BCD (Building Codes Division) administers.',
+    amendmentNotes:'Oregon Energy Efficiency Specialty Code (OEESC). Portland: Bureau of Development Services.'},
+  GA:{ibc:'IBC 2018',iecc:'IECC 2015',
+    zones:{default:'3A',cities:{'atlanta':'3A','augusta':'3A','columbus':'3A','savannah':'2A','macon':'3A','athens':'3A','brunswick':'2A'}},
+    wind:{default:120,cities:{'savannah':140,'brunswick':145,'jekyll island':150}},
+    seismic:{default:'A',cities:{}},
+    adoptionNotes:'Georgia DCA administers state minimum codes. Local jurisdictions may adopt newer editions.',
+    amendmentNotes:'Coastal areas: Georgia High Wind Zone requirements. Georgia Energy Code applies.'},
+  NC:{ibc:'NCBC 2018 (IBC 2015 base)',iecc:'NCEC 2021',
+    zones:{default:'3A',cities:{'charlotte':'3A','raleigh':'3A','greensboro':'4A','winston-salem':'4A','durham':'3A','fayetteville':'3A','wilmington':'3A','asheville':'4A'}},
+    wind:{default:115,cities:{'wilmington':140,'outer banks':160}},
+    seismic:{default:'A/B',cities:{}},
+    adoptionNotes:'NC Building Code Council adopts statewide. NC uses modified IBC with significant state amendments.',
+    amendmentNotes:'NC coastal areas: wind-borne debris region requirements. CAMA permits in coastal areas.'},
+  PA:{ibc:'IBC 2018',iecc:'IECC 2021',
+    zones:{default:'5A',cities:{'philadelphia':'4A','pittsburgh':'5A','allentown':'5A','erie':'6A','reading':'5A','scranton':'5A','harrisburg':'5A'}},
+    wind:{default:115,cities:{}},
+    seismic:{default:'A/B',cities:{}},
+    adoptionNotes:'Pennsylvania UCC (Uniform Construction Code) — statewide. L&I administers.',
+    amendmentNotes:'Philadelphia: Dept of Licenses & Inspections uses separate Philadelphia Building Code.'},
+  OH:{ibc:'OBC 2023 (IBC 2021 base)',iecc:'IECC 2021',
+    zones:{default:'5A',cities:{'columbus':'5A','cleveland':'5A','cincinnati':'4A','toledo':'5A','akron':'5A','dayton':'5A'}},
+    wind:{default:115,cities:{}},seismic:{default:'A',cities:{}},
+    adoptionNotes:'Ohio Building Code (OBC) statewide. ODBC administers.',amendmentNotes:'Ohio Energy Code applies.'},
+  MI:{ibc:'IBC 2021',iecc:'IECC 2021',
+    zones:{default:'5A',cities:{'detroit':'5A','grand rapids':'5A','warren':'5A','sterling heights':'5A','lansing':'6A','ann arbor':'5A'}},
+    wind:{default:115,cities:{}},seismic:{default:'A',cities:{}},
+    adoptionNotes:'Michigan Building Code — statewide. LARA administers.',amendmentNotes:'Michigan Energy Code applies.'},
+  AZ:{ibc:'IBC 2018',iecc:'IECC 2018',
+    zones:{default:'2B',cities:{'phoenix':'2B','tucson':'3B','scottsdale':'2B','chandler':'2B','tempe':'2B','mesa':'2B','glendale':'2B','flagstaff':'5B','yuma':'2B','sedona':'4B'}},
+    wind:{default:110,cities:{}},seismic:{default:'B/C',cities:{}},
+    adoptionNotes:'Arizona has no statewide building code. Cities adopt independently.',amendmentNotes:'Most Arizona cities use IBC 2018 or 2021. Verify with local jurisdiction.'},
+  CO:{ibc:'IBC 2021',iecc:'IECC 2021',
+    zones:{default:'5B',cities:{'denver':'5B','colorado springs':'5B','aurora':'5B','fort collins':'6B','boulder':'5B','pueblo':'5B','grand junction':'5B','aspen':'7'}},
+    wind:{default:115,cities:{}},seismic:{default:'B',cities:{}},
+    adoptionNotes:'Colorado has no statewide code. Cities/counties adopt independently. Most use IBC 2021.',amendmentNotes:'High altitude (>7000ft): verify radon mitigation. Mountain communities: snow load critical.'},
+  NV:{ibc:'IBC 2018',iecc:'IECC 2018',
+    zones:{default:'3B',cities:{'las vegas':'3B','henderson':'3B','reno':'5B','north las vegas':'3B','sparks':'5B'}},
+    wind:{default:110,cities:{}},seismic:{default:'C/D',cities:{'reno':'D1','las vegas':'C'}},
+    adoptionNotes:'Nevada Revised Statutes — county adoption. Clark County (Las Vegas) and Washoe County (Reno) have their own amendments.',amendmentNotes:''},
+  VA:{ibc:'USBC 2021 (IBC 2021 base)',iecc:'IECC 2021',
+    zones:{default:'4A',cities:{'virginia beach':'3A','norfolk':'3A','chesapeake':'3A','richmond':'4A','arlington':'4A','newport news':'3A','hampton':'3A','alexandria':'4A','roanoke':'4A'}},
+    wind:{default:120,cities:{'virginia beach':130,'norfolk':130,'outer banks':155}},
+    seismic:{default:'A/B',cities:{}},
+    adoptionNotes:'Virginia USBC (Uniform Statewide Building Code) — statewide.',amendmentNotes:'DCRA in Northern VA/Arlington. Coastal: wind-borne debris region.'},
+  MA:{ibc:'780 CMR (IBC 2015 base)',iecc:'IECC 2021',
+    zones:{default:'5A',cities:{'boston':'5A','worcester':'5A','springfield':'5A','cambridge':'5A','lowell':'5A','brockton':'5A','new bedford':'5A'}},
+    wind:{default:120,cities:{'cape cod':135,'nantucket':145,'marthas vineyard':145}},
+    seismic:{default:'B',cities:{}},
+    adoptionNotes:'Massachusetts 780 CMR (8th ed.) — significant IBC amendments. BBRS administers.',amendmentNotes:'MA Stretch Energy Code in many municipalities (stricter than IECC). Boston: ISD approval.'},
+  MD:{ibc:'IBC 2018',iecc:'IECC 2021',
+    zones:{default:'4A',cities:{'baltimore':'4A','columbia':'4A','germantown':'4A','silver spring':'4A','annapolis':'4A','ocean city':'3A'}},
+    wind:{default:115,cities:{'ocean city':135}},
+    seismic:{default:'A',cities:{}},
+    adoptionNotes:'Maryland Building Performance Standards — statewide. Local amendments allowed.',amendmentNotes:'Baltimore City has own code enforcement. Prince George\'s and Montgomery Co. have amendments.'},
+  MN:{ibc:'IBC 2020',iecc:'IECC 2021',
+    zones:{default:'6A',cities:{'minneapolis':'6A','saint paul':'6A','rochester':'7','duluth':'7','bloomington':'6A'}},
+    wind:{default:115,cities:{}},seismic:{default:'A',cities:{}},
+    adoptionNotes:'Minnesota State Building Code — statewide. DLI administers.',amendmentNotes:'MN Energy Code (Chapter 1322) applies. Vapor retarder requirements critical.'},
+  WI:{ibc:'IBC 2021',iecc:'IECC 2021',
+    zones:{default:'6A',cities:{'milwaukee':'6A','madison':'6A','green bay':'7','kenosha':'6A','racine':'6A'}},
+    wind:{default:115,cities:{}},seismic:{default:'A',cities:{}},
+    adoptionNotes:'Wisconsin Commercial Building Code — statewide. DSPS administers.',amendmentNotes:'Wisconsin Energy Conservation Code (SPS 361-366).'},
+  TN:{ibc:'IBC 2018',iecc:'IECC 2018',
+    zones:{default:'4A',cities:{'nashville':'3A','memphis':'3A','knoxville':'4A','chattanooga':'3A','clarksville':'4A'}},
+    wind:{default:115,cities:{}},seismic:{default:'B/C',cities:{'memphis':'C','jackson':'C'}},
+    adoptionNotes:'Tennessee adopts IBC statewide. Larger counties/cities adopt independently.',amendmentNotes:'New Madrid Seismic Zone affects western TN — verify with structural engineer.'},
+  MO:{ibc:'IBC 2018',iecc:'IECC 2018',
+    zones:{default:'4A',cities:{'kansas city':'4A','st. louis':'4A','springfield':'4A','columbia':'4A','independence':'4A'}},
+    wind:{default:115,cities:{}},seismic:{default:'B/C',cities:{'st. louis':'C','cape girardeau':'C'}},
+    adoptionNotes:'Missouri has no statewide code. Cities adopt independently.',amendmentNotes:'New Madrid Seismic Zone affects southeastern MO.'},
+  IN:{ibc:'IBC 2020',iecc:'IECC 2021',
+    zones:{default:'5A',cities:{'indianapolis':'5A','fort wayne':'5A','evansville':'4A','south bend':'5A','gary':'5A'}},
+    wind:{default:115,cities:{}},seismic:{default:'A',cities:{}},
+    adoptionNotes:'Indiana Building Code — statewide. IDHS administers.',amendmentNotes:''},
+  KY:{ibc:'IBC 2018',iecc:'IECC 2018',
+    zones:{default:'4A',cities:{'louisville':'4A','lexington':'4A','bowling green':'4A','covington':'4A'}},
+    wind:{default:115,cities:{}},seismic:{default:'A/B',cities:{}},
+    adoptionNotes:'Kentucky Building Code — statewide. DBC administers.',amendmentNotes:''},
+  SC:{ibc:'IBC 2021',iecc:'IECC 2021',
+    zones:{default:'3A',cities:{'columbia':'3A','charleston':'3A','greenville':'4A','spartanburg':'4A','myrtle beach':'3A'}},
+    wind:{default:130,cities:{'myrtle beach':140,'charleston':145,'hilton head':150}},
+    seismic:{default:'B/C',cities:{'charleston':'C/D'}},
+    adoptionNotes:'South Carolina Building Codes Council. Coastal: SC Coastal Zone Management.',amendmentNotes:'Wind-borne debris region on coast. Charleston: high seismic — verify SDC.'},
+  AL:{ibc:'IBC 2021',iecc:'IECC 2021',
+    zones:{default:'2A',cities:{'birmingham':'3A','montgomery':'2A','huntsville':'3A','mobile':'2A','tuscaloosa':'3A'}},
+    wind:{default:130,cities:{'mobile':150,'gulf shores':160}},
+    seismic:{default:'A',cities:{}},
+    adoptionNotes:'Alabama has no statewide building code. Cities adopt independently.',amendmentNotes:'Coastal areas: significant wind requirements.'},
+  LA:{ibc:'IBC 2021',iecc:'IECC 2021',
+    zones:{default:'2A',cities:{'new orleans':'2A','baton rouge':'2A','shreveport':'3A','lafayette':'2A','lake charles':'2A','metairie':'2A'}},
+    wind:{default:140,cities:{'new orleans':150,'houma':160,'morgan city':160,'lake charles':150}},
+    seismic:{default:'A',cities:{}},
+    adoptionNotes:'Louisiana State Uniform Construction Code (LSUCC). LSUCCC administers.',amendmentNotes:'Hurricane-prone region: significant wind requirements per FBC-inspired provisions.'},
+  MS:{ibc:'IBC 2021',iecc:'IECC 2021',
+    zones:{default:'2A',cities:{'jackson':'3A','gulfport':'2A','biloxi':'2A','hattiesburg':'2A'}},
+    wind:{default:140,cities:{'biloxi':160,'gulfport':160,'pascagoula':160}},
+    seismic:{default:'A',cities:{}},
+    adoptionNotes:'Mississippi Building Codes — statewide with local amendments.',amendmentNotes:'Gulf Coast: extreme wind zone.'},
+  OK:{ibc:'IBC 2021',iecc:'IECC 2021',
+    zones:{default:'3A',cities:{'oklahoma city':'3A','tulsa':'3A','norman':'3A','broken arrow':'3A','lawton':'3A'}},
+    wind:{default:125,cities:{}},seismic:{default:'A/B',cities:{}},
+    adoptionNotes:'Oklahoma has no statewide building code. Cities adopt independently.',amendmentNotes:'Tornado-prone: consider tornado shelter requirements. OK Panhandle: 3B.'},
+  KS:{ibc:'IBC 2018',iecc:'IECC 2018',
+    zones:{default:'4A',cities:{'wichita':'4A','overland park':'4A','kansas city':'4A','topeka':'5A','olathe':'4A'}},
+    wind:{default:115,cities:{}},seismic:{default:'A',cities:{}},
+    adoptionNotes:'Kansas has no statewide building code. Cities adopt independently.',amendmentNotes:''},
+  NE:{ibc:'IBC 2018',iecc:'IECC 2018',
+    zones:{default:'5A',cities:{'omaha':'5A','lincoln':'5A','bellevue':'5A','grand island':'6A'}},
+    wind:{default:115,cities:{}},seismic:{default:'A',cities:{}},
+    adoptionNotes:'Nebraska has no statewide building code.',amendmentNotes:''},
+  IA:{ibc:'IBC 2021',iecc:'IECC 2021',
+    zones:{default:'6A',cities:{'des moines':'6A','cedar rapids':'6A','davenport':'5A','sioux city':'6A'}},
+    wind:{default:115,cities:{}},seismic:{default:'A',cities:{}},
+    adoptionNotes:'Iowa State Building Code — statewide.',amendmentNotes:''},
+  AR:{ibc:'IBC 2018',iecc:'IECC 2015',
+    zones:{default:'3A',cities:{'little rock':'3A','fort smith':'3A','fayetteville':'4A','springdale':'4A'}},
+    wind:{default:115,cities:{}},seismic:{default:'B',cities:{}},
+    adoptionNotes:'Arkansas Fire Prevention Code / building codes adopted locally.',amendmentNotes:''},
+  NM:{ibc:'IBC 2018',iecc:'IECC 2018',
+    zones:{default:'3B',cities:{'albuquerque':'3B','las cruces':'3B','santa fe':'5B','rio rancho':'3B','roswell':'4B'}},
+    wind:{default:115,cities:{}},seismic:{default:'C',cities:{}},
+    adoptionNotes:'New Mexico Construction Industries Division.',amendmentNotes:'High altitude areas: verify snow loads.'},
+  UT:{ibc:'IBC 2021',iecc:'IECC 2021',
+    zones:{default:'5B',cities:{'salt lake city':'5B','west valley city':'5B','provo':'5B','st. george':'3B','ogden':'6B','moab':'4B'}},
+    wind:{default:115,cities:{}},seismic:{default:'C/D',cities:{'salt lake city':'D1','ogden':'D1'}},
+    adoptionNotes:'Utah Building Code — statewide. DHPL administers.',amendmentNotes:'Wasatch Front: active fault zone — verify seismic with geotechnical engineer.'},
+  ID:{ibc:'IBC 2018',iecc:'IECC 2018',
+    zones:{default:'6B',cities:{'boise':'5B','nampa':'5B','meridian':'5B','idaho falls':'7','pocatello':'6B'}},
+    wind:{default:110,cities:{}},seismic:{default:'C',cities:{}},
+    adoptionNotes:'Idaho Building Code — statewide.',amendmentNotes:''},
+  MT:{ibc:'IBC 2021',iecc:'IECC 2021',
+    zones:{default:'6B',cities:{'billings':'6B','missoula':'6B','great falls':'7','bozeman':'7','helena':'7'}},
+    wind:{default:115,cities:{}},seismic:{default:'C/D',cities:{}},
+    adoptionNotes:'Montana has no statewide building code. Local adoption.',amendmentNotes:'Mountain communities: heavy snow loads critical.'},
+  WY:{ibc:'IBC 2021',iecc:'IECC 2021',
+    zones:{default:'7',cities:{'cheyenne':'7','casper':'7','laramie':'7','gillette':'7'}},
+    wind:{default:120,cities:{}},seismic:{default:'B',cities:{}},
+    adoptionNotes:'Wyoming has no statewide building code.',amendmentNotes:'Extreme wind in high plains. Heavy snow loads.'},
+  ND:{ibc:'IBC 2018',iecc:'IECC 2018',
+    zones:{default:'7',cities:{'fargo':'7','bismarck':'7','grand forks':'7','minot':'7'}},
+    wind:{default:115,cities:{}},seismic:{default:'A',cities:{}},
+    adoptionNotes:'North Dakota has no statewide building code.',amendmentNotes:'Extreme cold climate: vapor retarder critical.'},
+  SD:{ibc:'IBC 2021',iecc:'IECC 2021',
+    zones:{default:'6A',cities:{'sioux falls':'6A','rapid city':'6B'}},
+    wind:{default:115,cities:{}},seismic:{default:'A',cities:{}},
+    adoptionNotes:'South Dakota has no statewide building code.',amendmentNotes:''},
+  MN:{ibc:'IBC 2020',iecc:'IECC 2021',zones:{default:'6A',cities:{'minneapolis':'6A','saint paul':'6A','duluth':'7'}},wind:{default:115,cities:{}},seismic:{default:'A',cities:{}},adoptionNotes:'Minnesota State Building Code statewide.',amendmentNotes:''},
+  NH:{ibc:'IBC 2018',iecc:'IECC 2018',zones:{default:'6A',cities:{'manchester':'6A','nashua':'6A','concord':'6A'}},wind:{default:130,cities:{'coastal':140}},seismic:{default:'A/B',cities:{}},adoptionNotes:'NH Building Code — statewide.',amendmentNotes:'Coastal NH: wind-borne debris.'},
+  VT:{ibc:'IBC 2018',iecc:'IECC 2018',zones:{default:'6A',cities:{'burlington':'7','montpelier':'7'}},wind:{default:115,cities:{}},seismic:{default:'B',cities:{}},adoptionNotes:'Vermont Fire & Building Safety Code.',amendmentNotes:''},
+  ME:{ibc:'IBC 2015',iecc:'IECC 2021',zones:{default:'7',cities:{'portland':'6A','bangor':'7'}},wind:{default:130,cities:{'coastal':140}},seismic:{default:'A',cities:{}},adoptionNotes:'Maine adopts IBC with amendments.',amendmentNotes:'Coastal: wind and flood zone.'},
+  CT:{ibc:'RCNYS 2021 / IBC 2021',iecc:'IECC 2021',zones:{default:'5A',cities:{'bridgeport':'5A','new haven':'5A','hartford':'5A','stamford':'5A'}},wind:{default:120,cities:{'coastal':130}},seismic:{default:'A',cities:{}},adoptionNotes:'CT State Building Code (IBC 2021 base).',amendmentNotes:''},
+  RI:{ibc:'IBC 2018',iecc:'IECC 2018',zones:{default:'5A',cities:{'providence':'5A'}},wind:{default:130,cities:{'coastal':140}},seismic:{default:'A',cities:{}},adoptionNotes:'RI State Building Code.',amendmentNotes:''},
+  DE:{ibc:'IBC 2018',iecc:'IECC 2018',zones:{default:'4A',cities:{'wilmington':'4A','dover':'4A','newark':'4A'}},wind:{default:120,cities:{'coastal':130}},seismic:{default:'A',cities:{}},adoptionNotes:'Delaware State Fire Prevention Commission.',amendmentNotes:''},
+  NJ:{ibc:'NJ UCC (IBC 2021 base)',iecc:'IECC 2021',zones:{default:'5A',cities:{'newark':'4A','jersey city':'4A','paterson':'5A','trenton':'5A','camden':'4A'}},wind:{default:120,cities:{'jersey shore':140}},seismic:{default:'A',cities:{}},adoptionNotes:'NJ Uniform Construction Code — statewide. DCA administers.',amendmentNotes:'NJ has significant IBC amendments. Shore communities: flood zone compliance.'},
+  DC:{ibc:'DC Building Code 2020 (IBC 2018 base)',iecc:'IECC 2021',zones:{default:'4A',cities:{'washington dc':'4A'}},wind:{default:115,cities:{}},seismic:{default:'A',cities:{}},adoptionNotes:'DC DCRA administers.',amendmentNotes:'Historic preservation: HPRB review. FEMA flood maps: check AE/VE zones.'},
+  HI:{ibc:'IBC 2021',iecc:'IECC 2021',zones:{default:'1A',cities:{'honolulu':'1A','hilo':'1A','kailua':'1A','pearl city':'1A'}},wind:{default:130,cities:{}},seismic:{default:'C/D',cities:{}},adoptionNotes:'Hawaii State Building Code — statewide. DCCA administers.',amendmentNotes:'Tsunami zone — check FEMA FIRM maps. High wind — Hawaii hurricane requirements.'},
+  AK:{ibc:'IBC 2021',iecc:'IECC 2021',zones:{default:'7',cities:{'anchorage':'7','fairbanks':'8','juneau':'7'}},wind:{default:115,cities:{}},seismic:{default:'D/E',cities:{'anchorage':'D2'}},adoptionNotes:'Alaska Fire Code / IBC adopted locally.',amendmentNotes:'Permafrost in interior/northern AK — foundation design critical. Extreme cold.'},
+  PR:{ibc:'IBC 2018',iecc:'IECC 2018',zones:{default:'1A',cities:{'san juan':'1A','ponce':'1A','mayaguez':'1A'}},wind:{default:195,cities:{}},seismic:{default:'D/E',cities:{}},adoptionNotes:'Puerto Rico uses IBC. PR Planning Board regulates.',amendmentNotes:'Hurricane design winds extremely high. High seismic zone — verify with structural engineer.'},
+};
+
+// IECC climate zone → key thermal/energy parameters
+const CLIMATE_DATA = {
+  '1A':{desc:'Very Hot Humid',hdd65:0,cdd65:8000,r_wall:13,r_roof:49,r_floor:13,u_window:0.40,notes:'Cooling-dominated. Vapor barrier on exterior. HVAC sizing critical.'},
+  '2A':{desc:'Hot Humid',hdd65:2000,cdd65:5000,r_wall:13,r_roof:49,r_floor:13,u_window:0.40,notes:'Humid summers. Dehumidification critical. Hurricane risk varies.'},
+  '2B':{desc:'Hot Dry',hdd65:2000,cdd65:5000,r_wall:13,r_roof:38,r_floor:13,u_window:0.40,notes:'Arid. Evaporative cooling may apply. Low humidity.'},
+  '3A':{desc:'Warm Humid',hdd65:3000,cdd65:4000,r_wall:13,r_roof:49,r_floor:13,u_window:0.35,notes:'Mixed climate. Good natural ventilation potential.'},
+  '3B':{desc:'Warm Dry',hdd65:3000,cdd65:4000,r_wall:13,r_roof:38,r_floor:13,u_window:0.35,notes:'Arid warm. Low cooling loads at altitude.'},
+  '3C':{desc:'Warm Marine',hdd65:3000,cdd65:1000,r_wall:13,r_roof:38,r_floor:13,u_window:0.35,notes:'Mild year-round. Natural ventilation often sufficient.'},
+  '4A':{desc:'Mixed Humid',hdd65:4000,cdd65:2000,r_wall:20,r_roof:60,r_floor:19,u_window:0.32,notes:'Both heating and cooling season. Moisture management both directions.'},
+  '4B':{desc:'Mixed Dry',hdd65:4000,cdd65:2000,r_wall:20,r_roof:49,r_floor:19,u_window:0.32,notes:'Arid mixed.'},
+  '4C':{desc:'Mixed Marine',hdd65:4000,cdd65:1000,r_wall:20,r_roof:49,r_floor:19,u_window:0.32,notes:'Pacific Northwest. Rain management critical.'},
+  '5A':{desc:'Cool Humid',hdd65:5000,cdd65:1000,r_wall:20,r_roof:60,r_floor:30,u_window:0.30,notes:'Significant heating season. Vapor barrier on interior side.'},
+  '5B':{desc:'Cool Dry',hdd65:5000,cdd65:1000,r_wall:20,r_roof:60,r_floor:30,u_window:0.30,notes:'Arid cool.'},
+  '6A':{desc:'Cold Humid',hdd65:6000,cdd65:500,r_wall:20,r_roof:60,r_floor:30,u_window:0.30,notes:'Cold winters. Continuous insulation required in many cases.'},
+  '6B':{desc:'Cold Dry',hdd65:6000,cdd65:500,r_wall:20,r_roof:60,r_floor:30,u_window:0.30,notes:'Cold dry climate.'},
+  '7' :{desc:'Very Cold',hdd65:7000,cdd65:0,r_wall:20,r_roof:60,r_floor:38,u_window:0.28,notes:'Very cold. Thermal bridging control critical. Heavy snow loads.'},
+  '8' :{desc:'Subarctic/Arctic',hdd65:10000,cdd65:0,r_wall:20,r_roof:60,r_floor:38,u_window:0.25,notes:'Extreme cold. Special foundation design.'},
+};
+
+// Seismic Design Category → implications
+const SEISMIC_DATA = {
+  'A':{desc:'Very Low',reqts:'No special seismic provisions',drift:'Standard',det:'Ordinary'},
+  'B':{desc:'Low',reqts:'Nominal seismic details',drift:'Standard',det:'Ordinary'},
+  'C':{desc:'Moderate',reqts:'Intermediate seismic details; irregular buildings need EOR',drift:'Moderate',det:'Intermediate'},
+  'D1':{desc:'High',reqts:'Special moment frames or shear walls; special inspection required',drift:'Strict',det:'Special'},
+  'D2':{desc:'High',reqts:'Special moment frames or shear walls; special inspection required',drift:'Strict',det:'Special'},
+  'E':{desc:'Very High',reqts:'Special structural system; SFRS required; geotechnical investigation',drift:'Very Strict',det:'Special'},
+};
+
+// ── JURISDICTION HELPERS ──────────────────────────────────────────────────
+function getJurisdiction(){
+  const city=(document.getElementById('proj-city')?.value||'').toLowerCase().trim();
+  const state=(document.getElementById('proj-state')?.value||'TX').toUpperCase();
+  const addr=(document.getElementById('proj-addr')?.value||'').trim();
+  const db=JURIS_DB[state]||JURIS_DB['TX'];
+  // Detect climate zone: check city overrides first
+  let cz=db.zones.default;
+  for(const [k,v] of Object.entries(db.zones.cities||{})){if(city.includes(k)){cz=v;break;}}
+  // Wind speed
+  let wind=db.wind.default;
+  for(const [k,v] of Object.entries(db.wind.cities||{})){if(city.includes(k)){wind=v;break;}}
+  // Seismic
+  let sdc=db.seismic.default;
+  for(const [k,v] of Object.entries(db.seismic.cities||{})){if(city.includes(k)){sdc=v;break;}}
+  const cdata=CLIMATE_DATA[cz]||CLIMATE_DATA['3A'];
+  const sdcData=SEISMIC_DATA[sdc]||SEISMIC_DATA['A'];
+  return{state,city,addr,db,cz,cdata,wind,sdc,sdcData,
+    label:city?(city.charAt(0).toUpperCase()+city.slice(1))+', '+state:state};
+}
+
+function onLocationChange(){
+  const j=getJurisdiction();
+  const card=document.getElementById('juris-card');
+  const body=document.getElementById('juris-body');
+  if(!card||!body)return;
+  if(!j.state){card.style.display='none';return;}
+  card.style.display='block';
+  // Wind-borne debris region (ASCE 7-22 §26.12.2): >130 mph within 1 mile of coast
+  const isHurricane=j.wind>=130;
+  const isHighWind=j.wind>=140;
+  const sdcHigh=['C','D1','D2','E'].includes(j.sdc.split('/')[0]);
+  body.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:7px">
+      <div style="background:var(--s3);border-radius:4px;padding:7px">
+        <div style="font-size:.62rem;color:var(--t4);text-transform:uppercase;letter-spacing:.06em">IBC Edition</div>
+        <div style="font-size:.8rem;font-weight:700;color:var(--t1);margin-top:1px">${j.db.ibc}</div>
+      </div>
+      <div style="background:var(--s3);border-radius:4px;padding:7px">
+        <div style="font-size:.62rem;color:var(--t4);text-transform:uppercase;letter-spacing:.06em">Energy Code</div>
+        <div style="font-size:.8rem;font-weight:700;color:var(--t1);margin-top:1px">${j.db.iecc}</div>
+      </div>
+      <div style="background:var(--s3);border-radius:4px;padding:7px">
+        <div style="font-size:.62rem;color:var(--t4);text-transform:uppercase;letter-spacing:.06em">IECC Climate Zone</div>
+        <div style="font-size:.82rem;font-weight:700;color:var(--acc);margin-top:1px">${j.cz} — ${j.cdata.desc}</div>
+      </div>
+      <div style="background:var(--s3);border-radius:4px;padding:7px">
+        <div style="font-size:.62rem;color:var(--t4);text-transform:uppercase;letter-spacing:.06em">Design Wind Speed</div>
+        <div style="font-size:.82rem;font-weight:700;color:${isHighWind?'var(--red)':isHurricane?'var(--amb)':'var(--t1)'};margin-top:1px">${j.wind} mph ${isHighWind?'⚠ EXTREME':isHurricane?'⚠ Hurricane':'(ASCE 7)'}</div>
+      </div>
+      <div style="background:var(--s3);border-radius:4px;padding:7px">
+        <div style="font-size:.62rem;color:var(--t4);text-transform:uppercase;letter-spacing:.06em">Seismic Design Cat.</div>
+        <div style="font-size:.82rem;font-weight:700;color:${sdcHigh?'var(--red)':'var(--t1)'};margin-top:1px">${j.sdc} — ${j.sdcData.desc}</div>
+      </div>
+      <div style="background:var(--s3);border-radius:4px;padding:7px">
+        <div style="font-size:.62rem;color:var(--t4);text-transform:uppercase;letter-spacing:.06em">Seismic Detail</div>
+        <div style="font-size:.78rem;font-weight:600;color:var(--t2);margin-top:1px">${j.sdcData.det}</div>
+      </div>
+    </div>
+    <div style="background:var(--s3);border-radius:4px;padding:8px;margin-bottom:6px">
+      <div style="font-size:.67rem;font-weight:700;color:var(--amb);margin-bottom:4px">🌡 IECC Zone ${j.cz} — Min. Thermal Requirements</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px">
+        ${[['Wall R','R-'+j.cdata.r_wall],['Roof R','R-'+j.cdata.r_roof],['Floor R','R-'+j.cdata.r_floor],['Window U','U-'+j.cdata.u_window]].map(([l,v])=>`<div style="text-align:center"><div style="font-size:.65rem;color:var(--t4)">${l}</div><div style="font-size:.8rem;font-weight:700;color:var(--cyan)">${v}</div></div>`).join('')}
+      </div>
+      <div style="font-size:.67rem;color:var(--t3);margin-top:4px">${j.cdata.notes}</div>
+    </div>
+    ${isHurricane?`<div style="background:var(--red2);border:1px solid rgba(255,51,85,.2);border-left:3px solid var(--red);border-radius:4px;padding:7px;margin-bottom:5px"><div style="font-size:.7rem;font-weight:700;color:var(--red)">⚠ Wind-Borne Debris Region (ASCE 7 §26.12.2)</div><div style="font-size:.68rem;color:var(--t2);margin-top:3px">Design wind ${j.wind} mph ≥130 mph. Impact-resistant glazing or shutters required for openings. Wind-borne debris region provisions apply (ASCE 7 Ch.26). Verify with local jurisdiction for specific requirements.</div></div>`:''}
+    ${sdcHigh?`<div style="background:var(--red2);border:1px solid rgba(255,51,85,.2);border-left:3px solid var(--red);border-radius:4px;padding:7px;margin-bottom:5px"><div style="font-size:.7rem;font-weight:700;color:var(--red)">⚠ High Seismic (SDC ${j.sdc})</div><div style="font-size:.68rem;color:var(--t2);margin-top:3px">${j.sdcData.reqts}. §1705.12 Special inspections required. Verify SFRS with structural engineer. Geotechnical investigation recommended.</div></div>`:''}
+    ${j.db.adoptionNotes?`<div style="background:var(--s3);border-radius:4px;padding:7px;margin-bottom:5px"><div style="font-size:.67rem;font-weight:700;color:var(--t3);margin-bottom:2px">🏛 Jurisdiction Note</div><div style="font-size:.67rem;color:var(--t2);line-height:1.5">${j.db.adoptionNotes}</div></div>`:''}
+    ${j.db.amendmentNotes?`<div style="background:var(--amb2);border:1px solid rgba(255,170,0,.15);border-radius:4px;padding:7px"><div style="font-size:.67rem;font-weight:700;color:var(--amb);margin-bottom:2px">⚑ Local Amendments</div><div style="font-size:.67rem;color:var(--t2);line-height:1.5">${j.db.amendmentNotes}</div></div>`:''}
+  `;
+  // Update sidebar stats and compliance
+  updateStats();
+}
+
 function updateSite(){
   const b=getLandBounds();
   const c=document.getElementById('site-canvas');if(!c)return;
@@ -1602,39 +2173,51 @@ function computeFloor(floorIdx){
 function allFloorsCompute(){
   const floors=S.floors.length;
   const results=S.floors.map((_,i)=>computeFloor(i));
-  const sp=spr(),o=occ(),ty=type();
-  // Mixed occupancy across ALL floors
-  const allRooms=S.floors.flatMap(f=>f.els.filter(e=>e.type==='room'));
-  const allOccs=[...new Set(allRooms.map(r=>r.occ||(detectRoomType(r.label))||o).filter(Boolean))];
-  const hasMixed=allOccs.length>1;
-  const mixedAnalysis=hasMixed?buildMixedOccAnalysis(allRooms,o,ty,sp):null;
-  // OCC/CT recommendations
+  const sp=spr(),ty=type();
+  // Use new occupancy engine
+  const occStr=determineOccStrategy();
+  const o=occ();
+  const allOccs=occStr.allOccs;
+  const hasMixed=occStr.isMixed;
+  const mixedAnalysis=hasMixed||occStr.hasFW?buildMixedOccAnalysis(occStr,ty,sp):null;
   const occCtRec=buildOccCtRec(results,o,ty,sp);
   const projectAllPass=results.every(r=>r.allPass);
-  return{results,allOccs,hasMixed,mixedAnalysis,occCtRec,projectAllPass,floors,o,sp,ty};
+  return{results,allOccs,hasMixed,mixedAnalysis,occCtRec,occStr,projectAllPass,floors,o,sp,ty};
 }
 
-function buildMixedOccAnalysis(rooms,projOcc,ty,sp){
-  const occs=[...new Set(rooms.map(r=>r.occ||(detectRoomType(r.label))||projOcc).filter(Boolean))];
-  if(occs.length<=1)return{mixed:false,occs};
-  const pairs=[];
-  for(let i=0;i<occs.length;i++) for(let j=i+1;j<occs.length;j++){
-    const hr=(IBC.sepTable[occs[i]]||{})[occs[j]]||1;
-    pairs.push({a:occs[i],b:occs[j],hr,ref:'§Table 508.4'});
-  }
-  const maxHr=Math.max(...pairs.map(p=>p.hr));
+function buildMixedOccAnalysis(occStr,ty,sp){
+  const occs=occStr.allOccs;
+  const pairs=occStr.pairs||[];
+  const maxHr=occStr.maxHr||0;
+  const groups=occStr.sortedGroups||[];
+  const accessories=groups.filter(g=>g.isAccessory);
+  const significant=occStr.significant||[];
+  const mrOLF=occStr.mostRestrictiveOLF||100;
+  if(!occStr.isMixed&&!occStr.hasFW) return{mixed:false,occs};
   return{
-    mixed:true,occs,pairs,maxHr,
+    mixed:true,occs,pairs,maxHr,groups,significant,accessories,
     paths:[
+      {id:'accessory',label:'§508.2 Accessory Occupancies',icon:'⬛',
+       desc:`Small ancillary spaces (≤10% of floor area) classified as accessories to dominant occupancy. Accessories treated as part of primary occupancy — no separation required for accessory spaces.`
+         +(accessories.length?` Accessories detected: ${accessories.map(g=>g.occ+'('+g.pct+'%)').join(', ')}.`:' No accessories detected (all groups >10%).'),
+       req:`Each accessory ≤10% of floor area (§508.2.1). Accessory spaces: ${accessories.map(g=>`${g.occ}: ${g.sf.toLocaleString()} SF / ${g.pct}%`).join(', ')||'none ≤10%'}.`,
+       works:accessories.length>0&&significant.length<=1},
       {id:'nonsep',label:'§508.3 Non-Separated Occupancies',icon:'🟢',
-       desc:`All groups governed by the most restrictive requirements. No fire barrier between occupancies required. Use most restrictive OLF, height/area limits across all groups. §508.3.1: The most restrictive applicable provisions of each occupancy apply.`,
-       req:`Apply: most restrictive of ${occs.join('/')} for OLF, exits, travel, area. No interior separation required.`,works:true},
+       desc:`No fire barrier between occupancy groups required. The most restrictive provisions of ALL occupancies apply throughout the entire building. OLF = ${mrOLF} SF/person (most restrictive). Height/area limits = most restrictive of all groups.`,
+       req:`Most restrictive of ${occs.join('/')}: OLF=${mrOLF} SF/person, exits, travel, area. §508.3.1 — no interior rated separation.`,
+       works:true},
       {id:'sep',label:'§508.4 Separated Occupancies',icon:'🔵',
-       desc:`Each occupancy operates independently. Requires ${maxHr}-hr fire barrier between highest-rated pair (§Table 508.4). Each zone uses its own height/area table independently.`,
-       req:`Fire barriers: ${pairs.map(p=>`${p.a}/${p.b}=${p.hr}hr (${p.ref})`).join(', ')}. Each zone complies independently.`,works:true},
-      {id:'sprinkler',label:'NFPA 13 Sprinkler — Reduces Separation',icon:'💧',
-       desc:`§508.4 Note: NFPA 13 permits reduction of some Table 508.4 separations by one step. May eliminate costly fire barriers between certain pairs.`,
-       req:'Full NFPA 13 throughout. §903.2 requirements still apply.',works:!sp},
+       desc:`Fire-resistance-rated separation between groups per §Table 508.4. Each occupancy zone analyzed independently with its own height/area limits. Allows each zone to take advantage of its own (less restrictive) requirements.`,
+       req:`Required separations: ${pairs.map(p=>`${p.a}/${p.b}=${p.hr}hr`).join(', ')||'none — single group'}. Draw fire barriers (FW tool, 1-2hr) between zones.`,
+       works:true},
+      {id:'sprinkler',label:'NFPA 13 — Reduces §508.4 Separations',icon:'💧',
+       desc:`§508.4 Exception: With NFPA 13 throughout, some Table 508.4 separations are reduced by one step (e.g. 2-hr → 1-hr, 1-hr → NS). Can eliminate costly fire barriers between low-hazard pairs.`,
+       req:'Full NFPA 13 (§903.3.1.1) throughout entire building. Verify reduction with local AHJ.',
+       works:!sp},
+      {id:'firewall',label:'§706 Fire Wall — Separate Buildings',icon:'🧱',
+       desc:`A §706 fire wall (3-4hr, structural independence, full height) creates two legally separate buildings. Each side resets: area limits, height limits, sprinkler analysis, exit counts. This is the most powerful tool for large or mixed buildings — not just a fire barrier.`,
+       req:`3-4hr fire wall (§706.2 rating), structural independence (§706.4), continuity to/through roof (§706.5), rated openings (§716.5). ${occStr.hasFW?'Fire wall(s) detected in floor plan.':'Draw FW element and set rating to 3-hr or 4-hr.'}`,
+       works:true},
     ]
   };
 }
@@ -1796,7 +2379,7 @@ function buildComp(){
   </div>`;
 
   // Mixed occupancy
-  if(hasMixed&&mixedAnalysis){
+  if((hasMixed||r.occStr?.hasFW)&&mixedAnalysis){
     const mx=mixedAnalysis;
     h+=ck('Mixed Occupancy Analysis','§508 · §Table 508.4',true,
       `<div class="sbox wa"><div class="st">Multiple occupancy groups: ${mx.occs.join(', ')}</div>
@@ -2188,6 +2771,7 @@ function buildDeepComplianceReport(){
 function buildProjectContext(){
   const all=allFloorsCompute();
   const sp=spr();
+  const j=getJurisdiction();
   const checks=buildDeepComplianceReport();
   const fails=checks.filter(c=>c.pass===false);
   const warns=checks.filter(c=>c.pass===null);
@@ -2195,7 +2779,7 @@ function buildProjectContext(){
     const rooms=f.els.filter(e=>e.type==='room').map(r=>`${r.label||'Room'}[${r.occ||detectRoomType(r.label)||'default'},${Math.round(ft(r.w))}x${Math.round(ft(r.h))}ft]`);
     return `Floor ${i+1}: ${floorSF(f).toLocaleString()}SF, ${f.els.filter(e=>e.type==='exit').length}exits, ${f.els.filter(e=>e.type==='stair').length}stairs, ${rooms.join(',')||'no rooms'}`;
   }).join('\n');
-  return `Occ:${all.o}|Type:${all.ty}|Spr:${sp?'NFPA13':'None'}|Floors:${all.floors}|TotalSF:${S.floors.reduce((t,f)=>t+floorSF(f),0).toLocaleString()}|Ht:${S.floors.reduce((t,f)=>t+(f.htFt||14),0)}ft|Mixed:${all.hasMixed?all.allOccs.join(','):'No'}|${floors}|Fails:${fails.map(c=>c.ref+':'+c.desc).join(';')||'None'}`;
+  return `Location:${j.label}|IBC:${j.db.ibc}|IECC:${j.db.iecc}|ClimateZone:${j.cz}(${j.cdata.desc})|Wind:${j.wind}mph|Seismic:${j.sdc}|Occ:${all.o}|Type:${all.ty}|Spr:${sp?'NFPA13':'None'}|Floors:${all.floors}|TotalSF:${S.floors.reduce((t,f)=>t+floorSF(f),0).toLocaleString()}|Ht:${S.floors.reduce((t,f)=>t+(f.htFt||14),0)}ft|Mixed:${all.hasMixed?all.allOccs.join(','):'No'}|${floors}|Fails:${fails.map(c=>c.ref+':'+c.desc).join(';')||'None'}|JurisNote:${j.db.adoptionNotes}`;
 }
 
 // ══════════════════════════════════════════════════
@@ -2277,28 +2861,43 @@ ${egressFails.length?'<br><strong>Issues:</strong><br>'+egressFails.map(fmt).joi
 <br><span class="ai-ref">§Table 1017.2</span> Max travel: ${sp?IBC.td[o]?.[0]:IBC.td[o]?.[1]}ft ${sp?'(sprinklered)':'(unsprinklered)'}`;
   }
 
-  // ── OCCUPANCY / MIXED OCCUPANCY ───────────────────────────────────────────
-  if(/occupanc|mixed|508|group|classif/.test(q)){
-    if(all.hasMixed&&all.mixedAnalysis){
-      const mx=all.mixedAnalysis;
-      return `<strong>Mixed Occupancy Analysis (§508)</strong><br>
-Groups detected: <strong>${mx.occs.join(', ')}</strong><br><br>
-<strong>Option 1 — §508.3 Non-Separated:</strong><br>
-Apply the most restrictive requirements of all groups throughout. No fire barriers between groups required. Use lowest OLF (${Math.min(...mx.occs.map(o=>(IBC.olf[o]?.f||150)))} SF/person) and most restrictive exits/travel for all spaces.<br><br>
-<strong>Option 2 — §508.4 Separated:</strong><br>
-Fire barriers between groups per Table 508.4:<br>
-${mx.pairs?.map(p=>`• ${p.a} / ${p.b}: <strong>${p.hr}-hr</strong> fire barrier (§Table 508.4)`).join('<br>')||''}<br>
-Each zone complies independently with its own height/area limits.<br><br>
-<strong>Option 3 — Sprinkler concession:</strong><br>
-NFPA 13 may reduce some Table 508.4 ratings. See Alternatives tab for cost comparison.`;
+  // ── OCCUPANCY / MIXED OCCUPANCY / §508 ──────────────────────────────────────
+  if(/occupanc|mixed|508|group|classif|separat|fire.?wall.*occ|nonsep|accessory|dominant/.test(q)){
+    const occStr=determineOccStrategy();
+    const sp_=spr();
+    if(occStr.allOccs.length===0){
+      return `<strong>No rooms assigned yet</strong><br>Draw rooms in the Floor Plan and assign occupancy groups (dbl-click room → Identity tab) to see the §508 occupancy strategy analysis.`;
     }
-    return `<strong>Occupancy Classification: ${o}</strong><br>
-Single occupancy — no §508 mixed-occupancy analysis required.<br>
-• OLF: ${IBC.olf[o]?.f||150} SF/person gross (§Table 1004.5)<br>
-• Max stories (${ty}): ${IBC.ms[o]?.[IBC.ti[ty]||3]||4} (§Table 504.3)<br>
-• Max area/floor NS (${ty}): ${(v=>v==='UL'?'Unlimited':v?.toLocaleString()+' SF')(IBC.ma[o]?.[IBC.ti[ty]||3])} (§Table 506.2)<br>
-• Travel max: ${sp?IBC.td[o]?.[0]:IBC.td[o]?.[1]}ft ${sp?'sprinklered':'unsprinklered'} (§Table 1017.2)`;
+    if(occStr.isSingle){
+      const g=occStr.sortedGroups[0];
+      return `<strong>§303.1 Single Occupancy: ${g.occ} — ${IBC.occLabels?.[g.occ]||g.occ}</strong><br>
+All rooms classified as ${g.occ}. No §508 mixed-occupancy analysis required.<br><br>
+<strong>Key requirements for ${g.occ}:</strong><br>
+• OLF: ${IBC.olfFull?.[g.occ]||100} SF/person (§Table 1004.5)<br>
+• Exit strategy: §1006.3 per occupant load<br>
+• Sprinkler triggers: check §903.2 for ${g.occ} thresholds`;
+    }
+    const mx=buildMixedOccAnalysis(occStr,type(),sp_);
+    return `<strong>§303 Occupancy Groups in Your Building</strong><br>
+${occStr.sortedGroups.map(g=>`<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${occColorMap(g.occ)||'#888'}"></span>
+  <span class="ai-ref">${g.occ}</span> <strong>${IBC.occLabels?.[g.occ]||g.occ}</strong> — ${g.sf.toLocaleString()} SF (${g.pct}%) ${g.isAccessory?'<em style="color:var(--t4)">→ Accessory §508.2</em>':g.isPrimary?'<em style="color:var(--t4)">→ Dominant</em>':'<em style="color:var(--amb)">→ Significant</em>'}
+</div>`).join('')}<br>
+<strong>§508 Strategy Decision (4-Step Process):</strong><br>
+<strong>Step 1 — Identify each room's occupancy</strong><br>
+Groups found: ${occStr.allOccs.join(', ')}<br><br>
+<strong>Step 2 — Identify fire areas</strong><br>
+${occStr.hasFW?'✓ §706 Fire Wall detected → each side is a separate fire area with independent height/area limits':'No §706 fire walls → entire building is one fire area'}<br><br>
+<strong>Step 3 — Choose occupancy strategy</strong><br>
+${mx.accessories.length?`<span class="ai-ref">§508.2</span> Accessory option available: ${mx.accessories.map(g=>g.occ+' ('+g.pct+'%)').join(', ')} are ≤10% — can be treated as part of dominant ${occStr.dominant}<br>`:''}
+${mx.significant.length>1?`<span class="ai-ref">§508.3</span> Non-Separated: apply most restrictive provisions — OLF=${occStr.mostRestrictiveOLF} SF/person, most restrictive exits/travel<br>
+<span class="ai-ref">§508.4</span> Separated: fire barriers required — ${mx.pairs.map(p=>`${p.a}/${p.b}: ${p.hr}-hr`).join(', ')}<br>
+<span class="ai-ref">§706</span> Fire Wall: creates separate buildings — resets all area/height limits per side`:'Single dominant occupancy — no separation required'}<br><br>
+<strong>Step 4 — Apply Ch.5/7/9/10/11</strong><br>
+Current selection: <strong>${occStr.userStrategy==='auto'?'Auto (select strategy in sidebar for compliance)':occStr.userStrategy}</strong><br>
+${mx.pairs.length?`Maximum separation required: <strong>${occStr.maxHr}-hr</strong> (§Table 508.4)`:''}`;
   }
+
 
   // ── CONSTRUCTION TYPE ─────────────────────────────────────────────────────
   if(/construct|type|i-a|ii-b|v-b|iii|upgrade|ct|story limit|height limit/.test(q)){
@@ -2458,6 +3057,39 @@ ${fr.roomChecks.filter(r=>r.issues?.length).map(r=>`<strong>${r.label}:</strong>
     return `Floor ${fi+1} not found. Your project has ${totalFloors} floor(s).`;
   }
 
+  // ── JURISDICTION / CLIMATE / WIND / SEISMIC / ENERGY CODE ──────────────────
+  if(/climate|zone|iecc|energy code|wind|seismic|sdc|jurisdiction|city|state|location|address|amendm|local code|adopt/.test(q)){
+    const j=getJurisdiction();
+    const hasLoc=j.city||j.state!=='TX';
+    if(!hasLoc){
+      return `<strong>Location Not Set</strong><br>
+Go to <strong>🗺 Site tab</strong> → enter your City and State to get jurisdiction-specific data including:<br>
+• Applicable IBC/IECC edition for your jurisdiction<br>
+• IECC Climate Zone → min. R-values (walls, roof, floor) and window U-factor<br>
+• Design wind speed (ASCE 7) → wind-borne debris region if ≥130 mph<br>
+• Seismic Design Category → structural system requirements<br>
+• Local amendments and jurisdiction notes`;
+    }
+    const isHurricane=j.wind>=130;
+    const sdcHigh=['C','D1','D2','E'].includes(j.sdc.split('/')[0]);
+    return `<strong>Jurisdiction: ${j.label}</strong><br><br>
+<strong>Applicable Codes:</strong><br>
+• Building: <strong>${j.db.ibc}</strong><br>
+• Energy: <strong>${j.db.iecc}</strong> — Climate Zone <strong>${j.cz}</strong> (${j.cdata.desc})<br><br>
+<strong>IECC Zone ${j.cz} Minimum Envelope (§Table C402.1.3 / R402.1.2):</strong><br>
+• Wall: R-${j.cdata.r_wall} continuous or cavity<br>
+• Roof/Ceiling: R-${j.cdata.r_roof}<br>
+• Floor: R-${j.cdata.r_floor}<br>
+• Window: U-${j.cdata.u_window} max<br>
+• ${j.cdata.notes}<br><br>
+<strong>ASCE 7 Design Wind Speed: ${j.wind} mph</strong><br>
+${isHurricane?`⚠ ≥130 mph — Wind-borne Debris Region (ASCE 7 §26.12.2):<br>• Impact-resistant glazing or shutters on openings<br>• Gable end bracing per §R301.2.1<br>• Roof-to-wall connections verified<br>`:`Standard wind provisions apply.`}<br>
+<strong>Seismic Design Category: ${j.sdc} (${j.sdcData.desc})</strong><br>
+${j.sdcData.reqts}<br>
+${sdcHigh?`⚠ High SDC: Special inspection §1705.12 required. Engage licensed structural engineer with seismic experience.`:''}<br>
+${j.db.adoptionNotes?`<strong>Jurisdiction Note:</strong><br>${j.db.adoptionNotes}<br>`:''}${j.db.amendmentNotes?`<strong>Local Amendments:</strong><br>${j.db.amendmentNotes}`:''}`;
+  }
+
   // ── DEFAULT: show overall + prompt ───────────────────────────────────────
   return `<strong>IBC Code Assistant — ${o} / ${ty} / ${sp?'NFPA 13':'Unsprinklered'}</strong><br>
 ${fmt_summary(passes,fails,warns)}<br>
@@ -2523,6 +3155,7 @@ function clearChat(){
 function buildChatWelcome(){
   const all=allFloorsCompute();
   const sp=spr();
+  const j=getJurisdiction();
   const checks=buildDeepComplianceReport();
   const fails=checks.filter(c=>c.pass===false);
   const warns=checks.filter(c=>c.pass===null);
@@ -2534,7 +3167,7 @@ function buildChatWelcome(){
     <div style="font-size:.73rem;color:var(--t2);line-height:1.6;margin-bottom:7px">
       Works <strong>100% offline</strong> — reads your floor plan and compliance results in real time. No internet or login required.
     </div>
-    <div style="font-size:.72rem;color:var(--t3);margin-bottom:6px">Project: ${all.o} / ${all.ty} / ${sp?'NFPA 13':'Unsprinklered'} / ${all.floors} floor(s)</div>
+    <div style="font-size:.72rem;color:var(--t3);margin-bottom:6px">Project: ${all.o} / ${all.ty} / ${sp?'NFPA 13':'Unsprinklered'} / ${all.floors} floor(s) ${j.city?'/ '+j.label:''} ${j.city?'/ IECC '+j.cz:'— set location in 🗺 Site tab'}</div>
     ${fails.length?`<div style="padding:5px 8px;border-radius:4px;background:var(--red2);border-left:2px solid var(--red);font-size:.7rem;color:var(--red);margin-bottom:6px">⚠ ${fails.length} compliance failure(s) detected — ask me about them</div>`:''}
     <div style="font-size:.7rem;color:var(--t4);line-height:1.8">Try asking:<br>
       • "What are my compliance failures?"<br>
