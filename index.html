@@ -2634,7 +2634,7 @@ function buildCtbl(){
 function buildComp(){
   const el=document.getElementById('comp-body');if(!el)return;
   const allData=allFloorsCompute();
-  const {results,hasMixed,mixedAnalysis,occCtRec,projectAllPass,floors,o,sp,ty}=allData;
+  const {results,hasMixed,mixedAnalysis,occCtRec,projectAllPass,floors,o,sp,ty,occStr}=allData;
   let h='';
 
   // Project summary banner
@@ -2655,7 +2655,7 @@ function buildComp(){
   </div>`;
 
   // Mixed occupancy
-  if((hasMixed||r.occStr?.hasFW)&&mixedAnalysis){
+  if((hasMixed||occStr?.hasFW)&&mixedAnalysis){
     const mx=mixedAnalysis;
     h+=ck('Mixed Occupancy Analysis','§508 · §Table 508.4',true,
       `<div class="sbox wa"><div class="st">Multiple occupancy groups: ${mx.occs.join(', ')}</div>
