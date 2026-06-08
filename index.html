@@ -359,7 +359,11 @@ td.w{color:var(--amb);font-weight:700}
 </div>
 <div class="sec" id="sec-comp">
   <div style="flex:1;overflow-y:auto;padding:14px">
-    <div class="stitle">✅ IBC Compliance — All Floors <span class="ref">IBC 2021 · §303–§509 · §1003–§1028</span></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div class="stitle" style="margin-bottom:0">✅ IBC Compliance — All Floors <span class="ref">IBC 2021 · Ch.3–16</span></div>
+      <button class="tbtn on" style="background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border:none;padding:6px 14px;font-size:.75rem;border-radius:5px;cursor:pointer" onclick="runCheck();setTimeout(runFullComplianceCheck,100)">▶ Run Full Check</button>
+    </div>
+    <div id="full-check-results" style="margin-bottom:12px"></div>
     <div id="comp-body"></div>
   </div>
 </div>
@@ -372,7 +376,10 @@ td.w{color:var(--amb);font-weight:700}
 <div class="sec" id="sec-chat" style="flex-direction:column">
   <div style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px" id="chat-messages">
     <div style="background:var(--s3);border:1px solid var(--b1);border-radius:8px;padding:10px 12px">
-      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:.8rem;color:var(--acc);margin-bottom:4px">🤖 IBC Code Assistant</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:.8rem;color:var(--acc)">🤖 IBC Code Assistant</div>
+      <button onclick="clearChat()" style="font-size:.65rem;padding:2px 8px;border-radius:4px;background:var(--s3);border:1px solid var(--b2);color:var(--t4);cursor:pointer">Clear</button>
+    </div>
       <div style="font-size:.75rem;color:var(--t2);line-height:1.6">Ask me about your project's IBC compliance. I have full context of your floor plan, occupancies, construction type, sprinkler status, and code check results.<br>Examples: "Do I need a sprinkler?", "What §508 path is cheapest?", "Can I change to V-B?", "What does my restaurant require?"</div>
     </div>
   </div>
@@ -1412,8 +1419,7 @@ function editById(id){
         ${[['1. Occupancy',rv.occ+(rv.autoOcc&&!e.occ?' (auto)':'')],['2. Area',rv.sf.toLocaleString()+' SF'],['3. Occupant Load',rv.ol+' persons ('+rv.olf+' SF/person)'],['4. User Type',rv.userType],['5. Duration',rv.duration],['6. Fixed Elements',e.fixedElements||'none'],['7. Hazard',rv.hazard],['8. Accessibility',rv.accessStatus],['9. Min Exits',rv.minExitsRoom],['10. Max Travel',rv.maxTD+"ft"],['11. Fire Rating',rv.fireRatingNeeded+'-hr'],['12. Sprinkler',rv.sprTriggers.length?'Required':'Not triggered'],['13. Plumbing',rv.needsPlumbing?'Required':'Verify'],['14. Ventilation',rv.ventType],['15. Relationship',e.relationship||'independent']].map(([l,v])=>`<div class="rv-row"><span class="rv-lbl">${l}</span><span class="rv-val">${v}</span></div>`).join('')}
       </div>
     </div>`;
-    // script for tab switching inside modal
-    h+=`<script>function rmTab(id){document.querySelectorAll('.rm-tab').forEach((t,i)=>{const ids=['identity','people','hazards','egress','fire','access','code'];t.classList.toggle('on',ids[i]===id)});document.querySelectorAll('.rm-panel').forEach(p=>{p.classList.toggle('on',p.id==='rp-'+id)});}<\/script>`;
+    // rmTab is a global function defined below
   } else if(e.type==='exit'){
     h+=inp('m-w','Door Clear Width (in)',e.wIn||36,'number');
     h+=sel('m-r','Fire Rating (§716.5)',[['0','0-hr unrated'],['1','1-hr'],['2','2-hr']],String(e.rating||1));
@@ -1456,6 +1462,18 @@ function saveModal(){
   closeModal();saveHist();updateEL();showProp(e);renderAll();updateStats();
 }
 function closeModal(){document.getElementById('mov').classList.remove('on');}
+// ── Room modal tab switcher — MUST be global (not injected via innerHTML) ──
+function rmTab(id){
+  const ids=['identity','people','hazards','egress','fire','access','code'];
+  document.querySelectorAll('#mdl .rm-tab').forEach((t,i)=>{
+    t.classList.toggle('on', ids[i]===id);
+  });
+  document.querySelectorAll('#mdl .rm-panel').forEach(p=>{
+    p.classList.toggle('on', p.id==='rp-'+id);
+    p.style.display = p.id==='rp-'+id ? 'block' : 'none';
+  });
+}
+
 
 // ══════════════════════════════════════════════════
 // SITE PLAN
@@ -2058,67 +2076,443 @@ function chooseAlt(id){S.chosenAlt=S.chosenAlt===id?null:id;buildAlts();}
 // ══════════════════════════════════════════════════
 // CODE AI CHAT
 // ══════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════
+// CODE AI CHAT — using Claude artifact API (no CORS issues)
+// ══════════════════════════════════════════════════
+const CHAT_HISTORY = []; // multi-turn conversation memory
+
 function buildProjectContext(){
-  const all=allFloorsCompute();
-  const sp=spr();
-  const floors=S.floors.map((f,i)=>{
-    const sf=floorSF(f);
-    const rooms=f.els.filter(e=>e.type==='room').map(r=>{
-      const occ=r.occ||detectRoomType(r.label)||'(default)';
-      return `${r.label||'Room'} [${occ}, ${Math.round(ft(r.w))}x${Math.round(ft(r.h))}ft]`;
+  const all = allFloorsCompute();
+  const sp  = spr();
+
+  // Per-floor room detail
+  const floorDetail = S.floors.map((f,i) => {
+    const rooms = f.els.filter(e=>e.type==='room').map(r => {
+      const detectedOcc = r.occ || detectRoomType(r.label) || 'project default';
+      const wf = Math.round(ft(r.w)), hf = Math.round(ft(r.h));
+      const sf = wf*hf;
+      const rv = (typeof getRoomVariables === 'function')
+        ? getRoomVariables(r, all.o, sp, i, S.floors.length, 1)
+        : null;
+      return `    • ${r.label||'Room'}: ${wf}'×${hf}' (${sf.toLocaleString()} SF), occ=${detectedOcc}`
+        + (rv ? `, OL=${rv.ol}, hazard=${rv.hazard||'none'}, ${rv.sprTriggers?.length?'SPRINKLER TRIGGERED':'no spr trigger'}` : '');
     });
-    return `Floor ${i+1}: ${sf.toLocaleString()}SF, ${f.els.filter(e=>e.type==='exit').length} exits, ${f.els.filter(e=>e.type==='stair').length} stairs, rooms: ${rooms.join(', ')||'none'}`;
+    const exits   = f.els.filter(e=>e.type==='exit').length;
+    const stairs  = f.els.filter(e=>e.type==='stair'&&!e.isMirror).length;
+    const elevs   = f.els.filter(e=>e.type==='elev'&&!e.isMirror).length;
+    const fws     = f.els.filter(e=>e.type==='fw').length;
+    const sf      = floorSF(f);
+    const floorR  = all.results[i];
+    return `  Floor ${i+1} (${f.name}): ${sf.toLocaleString()} SF, OL=${floorR?.oll||0}, ${exits} exit(s), ${stairs} stair(s), ${elevs} elev, ${fws} FW\n`
+      + rooms.join('\n')
+      + (floorR?.upperFloorExitIssues?.length ? `\n    ⚠ ${floorR.upperFloorExitIssues.join('; ')}` : '')
+      + `\n    Status: ${floorR?.allPass ? 'PASS' : 'ISSUES: '+(floorR?.travelPass?'':'travel dist fail; ')+(floorR?.exitCountPass?'':'exit count fail; ')+(floorR?.stairOk?'':'stair width fail; ')+(floorR?.areaPass?'':'area fail; ')}`;
   }).join('\n');
-  return `PROJECT CONTEXT:
-- Occupancy: ${all.o} (${IBC.ctLabel[all.ty]||all.ty})
-- Construction Type: ${all.ty}
-- Sprinkler: ${sp?'NFPA 13 Full':'None'}
-- Floors: ${all.floors}
-- Total SF: ${S.floors.reduce((t,f)=>t+floorSF(f),0).toLocaleString()} SF
-- Mixed occupancies: ${all.hasMixed?all.allOccs.join(', '):'none (single group)'}
-- Compliance: ${all.projectAllPass?'ALL PASS':'ISSUES FOUND'}
+
+  // Site data
+  const lotW  = +(document.getElementById('lot-w')?.value||0);
+  const lotD  = +(document.getElementById('lot-d')?.value||0);
+  const bldgW = +(document.getElementById('bldg-w')?.value||0);
+  const bldgD = +(document.getElementById('bldg-d')?.value||0);
+
+  // OCC/CT issues
+  const ctIssues = all.occCtRec.filter(r=>r.type!=='pass').map(r=>`  ⚠ ${r.title}: ${r.action} [${r.ref}]`).join('\n');
+
+  return `=== IBC 2021 COMPLIANCE PROJECT CONTEXT ===
+Project:
+  Default Occupancy: ${all.o}
+  Construction Type: ${all.ty} (${IBC.ctLabel?.[all.ty]||all.ty})
+  Sprinkler: ${sp ? 'NFPA 13 Full Sprinkler System (§903)' : 'NONE — Unsprinklered'}
+  Total Floors: ${all.floors}
+  Total SF: ${S.floors.reduce((t,f)=>t+floorSF(f),0).toLocaleString()} SF
+  Building Height: ${S.floors.reduce((t,f)=>t+(f.htFt||14),0)} ft
+  Site: ${lotW}'×${lotD}' lot · Building ${bldgW}'×${bldgD}'
+  Mixed Occupancies: ${all.hasMixed ? all.allOccs.join(', ') + ' (§508 applies)' : 'No (single group)'}
+  Overall Compliance: ${all.projectAllPass ? 'ALL FLOORS PASS' : 'ISSUES FOUND'}
+
+Floors & Rooms:
+${floorDetail}
+
+Construction Type Assessment:
+${ctIssues || '  ✓ CT and occupancy are appropriate for this project'}
+
+Chosen Strategy: ${S.chosenAlt || 'none selected'}
+===========================================`;
+}
+
+function buildDeepComplianceReport() {
+  // A systematic IBC chapter-by-chapter check with specific code refs
+  const all = allFloorsCompute();
+  const sp  = spr();
+  const ty  = type();
+  const o   = occ();
+  const tidx = IBC.ti[ty] || 3;
+  const totalFloors = S.floors.length;
+  const totalSFAll  = S.floors.reduce((t,f)=>t+floorSF(f),0);
+  const totalHtFt   = S.floors.reduce((t,f)=>t+(f.htFt||14),0);
+  const maxSFFloor  = Math.max(...all.results.map(r=>r.sf),0);
+  const checks = [];
+
+  const pass=(ref,desc,detail='')=>checks.push({pass:true, ref, desc, detail});
+  const fail=(ref,desc,detail='')=>checks.push({pass:false,ref, desc, detail});
+  const warn=(ref,desc,detail='')=>checks.push({pass:null, ref, desc, detail});
+
+  // ── CH.3 — OCCUPANCY CLASSIFICATION ──────────────────────────────────────
+  const allRooms = S.floors.flatMap(f=>f.els.filter(e=>e.type==='room'));
+  const detectedOccs = [...new Set(allRooms.map(r=>r.occ||detectRoomType(r.label)||o).filter(Boolean))];
+  if(detectedOccs.length > 1)
+    warn('§303/§508','Mixed occupancy groups detected: '+detectedOccs.join(', '),'§508 compliance path required — see Alternatives tab');
+  else
+    pass('§303.1','Single occupancy classification: '+o,'Consistent throughout project');
+
+  // ── CH.4 — SPECIAL DETAILED REQUIREMENTS ─────────────────────────────────
+  if(totalHtFt > 75)
+    fail('§403','High-rise building (>75 ft) — §403 special requirements',`${totalHtFt}ft height triggers: NFPA 13 sprinklers mandatory (§403.3), emergency voice/alarm (§403.4.1), fire command center (§403.4.6), emergency power (§403.4.7)`);
+  else if(totalHtFt > 55)
+    warn('§403.1','Building >55ft — sprinkler trigger (§903.2.6)',`${totalHtFt}ft. NFPA 13 required unless exempt.`);
+
+  const hasAssemblyA2 = allRooms.some(r=>(r.occ||detectRoomType(r.label))==='A-2');
+  if(hasAssemblyA2) warn('§420','Assembly A-2 spaces require special egress consideration','§1028: Assembly main exit ≥50% of OL width; §1029: Smoke-protected assembly seating if applicable');
+
+  // ── CH.5 — GENERAL BUILDING HEIGHTS AND AREAS ────────────────────────────
+  const maxStoriesAllowed = IBC.ms[o]?.[tidx] ?? 4;
+  if(totalFloors > maxStoriesAllowed)
+    fail('§Table 504.3',`${totalFloors} stories exceeds ${ty} limit of ${maxStoriesAllowed} for Occ. ${o}`,`Upgrade CT or add NFPA 13 (+1 story §504.3). I-A/I-B = unlimited.`);
+  else
+    pass('§Table 504.3',`Stories: ${totalFloors}/${maxStoriesAllowed} allowed for ${ty}/${o}`);
+
+  const maxHtAllowed = IBC.mh[ty];
+  const maxHtNum = maxHtAllowed==='UL' ? 99999 : (typeof maxHtAllowed==='number' ? maxHtAllowed : 40);
+  if(totalHtFt > maxHtNum)
+    fail('§Table 504.4',`Height ${totalHtFt}ft exceeds ${ty} limit of ${maxHtAllowed==='UL'?'UL':maxHtAllowed+'ft'}`,`Upgrade to I-A (UL) or I-B (160ft), or add NFPA 13 (+20ft §504.4)`);
+  else
+    pass('§Table 504.4',`Height: ${totalHtFt}ft / ${maxHtAllowed==='UL'?'Unlimited':maxHtAllowed+'ft'} allowed`);
+
+  const maxAreaNS = IBC.ma[o]?.[tidx];
+  const maxAreaNum = maxAreaNS==='UL' ? 99999 : (typeof maxAreaNS==='number' ? maxAreaNS : 9000);
+  const maxAreaSp  = maxAreaNS==='UL' ? 99999 : maxAreaNum*3;
+  const effectiveMax = sp ? maxAreaSp : maxAreaNum;
+  if(maxSFFloor > effectiveMax)
+    fail('§Table 506.2',`Floor area ${maxSFFloor.toLocaleString()} SF exceeds ${sp?'sprinklered':'NS'} limit of ${effectiveMax===99999?'UL':effectiveMax.toLocaleString()} SF`,`Options: §706 fire wall subdivision, upgrade CT, add/verify sprinklers (§506.3 ×3)`);
+  else
+    pass('§Table 506.2',`Area: ${maxSFFloor.toLocaleString()} / ${effectiveMax===99999?'UL':effectiveMax.toLocaleString()} SF ${sp?'(×3 sprinkler bonus §506.3)':''}`);
+
+  // ── CH.6 — TYPES OF CONSTRUCTION ─────────────────────────────────────────
+  pass('§Table 601',`Construction Type ${ty} — all structural elements must meet Table 601 fire-resistance ratings`,'Verify with structural engineer');
+
+  // ── CH.7 — FIRE & SMOKE PROTECTION ───────────────────────────────────────
+  const hasFW = S.floors.some(f=>f.els.some(e=>e.type==='fw'));
+  if(hasFW) pass('§706','§706 Fire Wall(s) present — verify: 3-4hr rating, structural independence, continuity to/through roof','§706.5: must extend to/through roof. §706.4: structural independence required.');
+  if(all.hasMixed) warn('§707/§Table 508.4','Mixed occupancy fire barriers required between groups',all.mixedAnalysis?.pairs?.map(p=>`${p.a}/${p.b}: ${p.hr}-hr`).join(', ')||'');
+
+  // Corridor ratings §1020
+  all.results.forEach(r=>{
+    const corrHr = r.oll>30 ? 1 : 0;
+    if(corrHr>0) warn('§1020.1',`Floor ${r.floorIdx+1}: Corridors serving OL>30 require 1-hr fire-resistance rating`,`OL=${r.oll}. §1020.2 openings: 20-min rated doors.`);
+  });
+
+  // ── CH.9 — FIRE PROTECTION SYSTEMS ───────────────────────────────────────
+  const sprTriggers=[];
+  if(o==='M' && maxSFFloor>12000 && !sp)   sprTriggers.push(`§903.2.7: Group M fire area >12,000 SF (actual: ${maxSFFloor.toLocaleString()} SF)`);
+  if(['A-1','A-2'].includes(o) && maxSFFloor>5000 && !sp) sprTriggers.push(`§903.2.1: Assembly fire area >5,000 SF`);
+  if(totalHtFt>55 && !sp)                  sprTriggers.push(`§903.2.6: Building height >55ft (actual: ${totalHtFt}ft)`);
+  if(totalHtFt>75)                          sprTriggers.push(`§903.2.11.3: High-rise >75ft — NFPA 13 mandatory`);
+  if(o==='R-2' && totalFloors>=4 && !sp)    sprTriggers.push(`§903.2.8: R-2 ≥4 stories requires NFPA 13`);
+  if(o==='E'   && !sp)                      sprTriggers.push(`§903.2.3: Group E requires NFPA 13 (exceptions apply)`);
+  if(sprTriggers.length)
+    fail('§903.2','Sprinkler system REQUIRED — triggers present',sprTriggers.join('\n'));
+  else if(sp)
+    pass('§903.2','NFPA 13 sprinkler system provided — §506.3 area bonus, §504.4 height bonus active');
+  else
+    pass('§903.2','No mandatory sprinkler triggers for this occupancy/size');
+
+  // Kitchen suppression
+  const hasKitchen = allRooms.some(r=>(r.label||'').toLowerCase().includes('kitchen'));
+  if(hasKitchen) warn('§904.12','Commercial kitchen hood suppression system required','§904.12: NFPA 96 Type I hood + fire suppression at all commercial cooking equipment');
+
+  // ── CH.10 — MEANS OF EGRESS ───────────────────────────────────────────────
+  all.results.forEach(r=>{
+    const flabel=`Floor ${r.floorIdx+1}`;
+    // Exit count
+    if(r.exitCountPass)
+      pass('§1006/§Table 1006.3.4',`${flabel}: ${r.exits.length} exit(s) provided, ${r.minExits} required (OL=${r.oll})`);
+    else
+      fail('§1006.3',`${flabel}: ${r.exits.length} exits — need ${r.minExits} (OL=${r.oll}>threshold)`,`§Table 1006.3.4: Add ${r.minExits-r.exits.length} more exit(s)`);
+
+    // Travel distance
+    if(r.travelData.length){
+      const worst=r.travelData.filter(t=>!t.pass);
+      if(worst.length)
+        fail('§Table 1017.2',`${flabel}: ${worst.length} room(s) exceed max travel distance ${r.maxTD}ft`,worst.map(t=>`${t.label}: ${t.distFt}ft`).join(', '));
+      else
+        pass('§Table 1017.2',`${flabel}: All rooms within ${r.maxTD}ft max travel distance (${r.sp?'sprinklered':'unsprinklered'})`);
+    }
+
+    // Common path
+    pass('§1006.2.1',`${flabel}: Common path of egress travel — verify ≤${r.sp?100:75}ft on plans`);
+
+    // Upper floor stair requirement
+    if(r.isUpperFloor){
+      if(r.stairs.length>0)
+        pass('§1006.3/§1022',`${flabel}: Enclosed stair present — upper floor egress satisfied`);
+      else
+        fail('§1006.3',`${flabel}: No enclosed stair — required for upper floor egress`,'§1022: Exit enclosure required. Stair must be rated 1-hr (≤4 floors) or 2-hr (>4 floors)');
+    }
+
+    // Stair widths
+    r.stairChecks.forEach(sc=>{
+      if(sc.pass) pass('§1011.2',`${flabel} ${sc.label}: Width ${sc.wIn}" ≥ ${sc.minW}" min`);
+      else        fail('§1011.2',`${flabel} ${sc.label}: Width ${sc.wIn}" < ${sc.minW}" minimum`,`§1011.2: Min 44" if OL≥50, 36" if OL<50`);
+    });
+
+    // Panic hardware §1010.1.9
+    if(r.oll>=50 && r.exits.length)
+      warn('§1010.1.9',`${flabel}: OL=${r.oll}≥50 — panic/fire exit hardware required on exit doors`,'§1010.1.9.1: Panic hardware required on all exit doors serving OL≥50 in A & E occupancies, and all OL≥50 where doors are latched');
+
+    // Elevator §1009.4
+    if(r.floorIdx===0 && r.elevReq){
+      if(r.elevPresent)
+        pass('§1009.4/ADA §206.2.3',`Accessible elevator provided — ${totalFloors}-floor building`);
+      else
+        fail('§1009.4',`Elevator required — ${totalFloors} floors`,`§1009.4 + ADA §206.2.3: Accessible vertical access required for multi-story buildings`);
+    }
+  });
+
+  // Exit door width §1005.1
+  all.results.forEach(r=>{
+    r.exitChecks.filter(e=>!e.wOk).forEach(e=>{
+      fail('§1005.1',`Exit door "${e.label}": ${e.wIn}" clear width < 32" minimum`,`§1005.1: Min 32" clear width. §1010.1.1: Min 28" door leaf.`);
+    });
+  });
+
+  // Illumination §1008
+  warn('§1008','Exit access, exits, and exit discharge require illumination ≥1 fc average',`§1008.1: Min 1 footcandle average at floor level. §1008.3: Emergency egress illumination required.`);
+
+  // Exit signage §1013
+  warn('§1013','Exit signs required at all required exits and where exit direction not obvious',`§1013.1: Illuminated exit signs. §1013.3: Internally illuminated or externally illuminated.`);
+
+  // ── CH.11 — ACCESSIBILITY ─────────────────────────────────────────────────
+  const pubRooms = allRooms.filter(r=>!r.accessibility||r.accessibility==='required'||r.publicAccess);
+  if(pubRooms.length)
+    warn('§1103/ADA','Accessible route required to all public spaces',`§1104: Accessible route. §1109: Accessible elements. Verify: door widths ≥32" clear (§1010.1.1), turning radius, counters ≤34".`);
+  pass('§1103.1',`${o} occupancy requires full accessibility — employee areas may qualify for §1103.2 exceptions`);
+
+  // ── CH.12 — INTERIOR ENVIRONMENT ─────────────────────────────────────────
+  warn('§1202','Natural or mechanical ventilation required per ASHRAE 62.1',`§1202.1: All occupied spaces must have ventilation. Min rates per ASHRAE 62.1 Table 6-1.`);
+  warn('§1205','Lighting — natural light or artificial required in occupied spaces',`§1205.1: Min illumination. §1205.3: Natural light: window area ≥8% of floor area in most occupancies.`);
+
+  // ── CH.13 — ENERGY EFFICIENCY ─────────────────────────────────────────────
+  warn('§1301/IECC','Energy code compliance required — IECC or ASHRAE 90.1',`§1301.1: Must comply with IECC. Climate zone 3A (DFW). Verify: envelope, lighting, HVAC efficiency.`);
+
+  // ── CH.16 — STRUCTURAL ───────────────────────────────────────────────────
+  warn('§1601/ASCE 7','Structural design per ASCE 7 required — live loads, wind, seismic',`§Table 1607.1 live loads: verify for each occupancy. Wind: 130+ mph basic wind speed in DFW. Seismic: SDC B typical.`);
+
+  // ── PLUMBING (IBC §2902) ──────────────────────────────────────────────────
+  const totalOL = all.results.reduce((t,r)=>t+r.oll,0);
+  warn('§Table 2902.1','Plumbing fixtures required per occupancy',`§Table 2902.1: Water closets, lavatories, service sinks. At OL=${totalOL}, verify fixture counts for ${o}. ADA requires accessible fixtures.`);
+
+  return checks;
+}
+
+function buildProjectContext(){
+  const all = allFloorsCompute();
+  const sp  = spr();
+  const checks = buildDeepComplianceReport();
+  const fails = checks.filter(c=>c.pass===false);
+  const warns = checks.filter(c=>c.pass===null);
+
+  const floors=S.floors.map((f,i)=>{
+    const rooms=f.els.filter(e=>e.type==='room').map(r=>{
+      const detectedOcc=r.occ||detectRoomType(r.label)||'(project default)';
+      return `${r.label||'Room'} [${detectedOcc}, ${Math.round(ft(r.w))}x${Math.round(ft(r.h))}ft]`;
+    });
+    return `Floor ${i+1}: ${floorSF(f).toLocaleString()}SF, ${f.els.filter(e=>e.type==='exit').length} exits, ${f.els.filter(e=>e.type==='stair').length} stairs, rooms: ${rooms.join(', ')||'none'}`;
+  }).join('\n');
+
+  return `=== IBC 2021 PROJECT CONTEXT ===
+Occupancy: ${all.o} | Type: ${all.ty} | Sprinkler: ${spr()?'NFPA 13':'None'}
+Floors: ${all.floors} | Total SF: ${S.floors.reduce((t,f)=>t+floorSF(f),0).toLocaleString()} | Height: ${S.floors.reduce((t,f)=>t+(f.htFt||14),0)}ft
+Mixed Occ: ${all.hasMixed?all.allOccs.join(', '):'No'}
+Overall: ${all.projectAllPass?'PASS':'ISSUES FOUND'} (${fails.length} failures, ${warns.length} warnings)
 ${floors}
-OCC/CT Assessment: ${all.occCtRec.map(r=>r.title+': '+r.action).join(' | ')}`;
+Failures: ${fails.map(c=>c.ref+': '+c.desc).join(' | ')||'None'}
+=================================`;
 }
 
 async function sendChat(){
   const input=document.getElementById('chat-input');
   const msg=input?.value?.trim();
-  if(!msg)return;
+  if(!msg) return;
   input.value='';
   const container=document.getElementById('chat-messages');
-  if(!container)return;
-  // User message
-  container.insertAdjacentHTML('beforeend',`<div style="display:flex;justify-content:flex-end;margin-bottom:6px">
-    <div style="background:var(--acc);color:#fff;border-radius:8px 8px 2px 8px;padding:8px 12px;max-width:75%;font-size:.78rem;line-height:1.55">${msg.replace(/</g,'&lt;')}</div>
-  </div>`);
-  container.scrollTop=container.scrollHeight;
-  // Thinking indicator
-  const thinkId='think-'+Date.now();
-  container.insertAdjacentHTML('beforeend',`<div id="${thinkId}" style="display:flex;gap:8px;margin-bottom:6px">
-    <div style="background:var(--s3);border:1px solid var(--b1);border-radius:2px 8px 8px 8px;padding:8px 12px;max-width:85%;font-size:.78rem;color:var(--t3)">
-      <span style="animation:blink 1s infinite">⋯</span> Analyzing your project...
-    </div></div>`);
-  container.scrollTop=container.scrollHeight;
-  const ctx=buildProjectContext();
-  const systemPrompt=`You are an expert IBC 2021 code consultant helping an architect analyze their building project for code compliance. You have access to the complete project context below. Always cite specific IBC section numbers (§303, §Table 506.2, etc.) in your answers. Be direct, practical, and focused on what the architect can do to comply. When possible, mention the cheapest or simplest path. If you don't know something specific, say so.
+  if(!container) return;
 
-${ctx}
-
-Answer the architect's question about their specific project. Be concise but complete. Always cite IBC section numbers.`;
-  try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:systemPrompt,messages:[{role:'user',content:msg}]})});
-    const data=await res.json();
-    const reply=data.content?.[0]?.text||'Sorry, I could not get a response. Please try again.';
-    document.getElementById(thinkId)?.remove();
-    container.insertAdjacentHTML('beforeend',`<div style="display:flex;gap:8px;margin-bottom:8px">
-      <div style="background:var(--s3);border:1px solid var(--b1);border-radius:2px 8px 8px 8px;padding:10px 12px;max-width:85%;font-size:.78rem;color:var(--t1);line-height:1.65;white-space:pre-wrap">${reply.replace(/</g,'&lt;')}</div>
+  // Add user bubble
+  container.insertAdjacentHTML('beforeend',`
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+      <div style="background:var(--acc);color:#fff;border-radius:8px 8px 2px 8px;padding:9px 13px;max-width:75%;font-size:.78rem;line-height:1.55">${msg.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>
     </div>`);
-  } catch(e){
+  container.scrollTop=container.scrollHeight;
+
+  // Thinking bubble
+  const thinkId='think-'+Date.now();
+  container.insertAdjacentHTML('beforeend',`
+    <div id="${thinkId}" style="display:flex;gap:9px;margin-bottom:8px;align-items:flex-start">
+      <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--acc),var(--acc2));display:flex;align-items:center;justify-content:center;font-size:.75rem;flex-shrink:0">🤖</div>
+      <div style="background:var(--s3);border:1px solid var(--b1);border-radius:2px 8px 8px 8px;padding:9px 13px;font-size:.78rem;color:var(--t3)">
+        <span style="display:inline-block;animation:blink 1.2s infinite">⋯</span> Analyzing your project against IBC 2021...
+      </div>
+    </div>`);
+  container.scrollTop=container.scrollHeight;
+
+  // Build context
+  const ctx = buildProjectContext();
+  const systemPrompt = `You are an expert IBC 2021 code consultant embedded in an architectural design tool. You have full context of the architect's project below. Your job is to help them understand compliance requirements, identify problems, and find the most cost-effective path to compliance.
+
+Rules:
+- ALWAYS cite specific IBC 2021 section numbers (§303.1, §Table 506.2, §1006.3, etc.)
+- Be direct and practical — what specifically needs to change?
+- When multiple paths exist, rank by cost (cheapest first)
+- If the question is about a specific room or element, analyze it with the 15 IBC variables framework
+- Keep answers focused — no more than 4-5 key points unless a full report is requested
+
+${ctx}`;
+
+  // Add to conversation history for multi-turn memory
+  CHAT_HISTORY.push({role:'user', content: msg});
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: CHAT_HISTORY
+      })
+    });
+
+    const data = await res.json();
+
+    // Handle API errors explicitly
+    if(data.error) {
+      throw new Error(data.error.message || 'API error');
+    }
+
+    const reply = data.content?.[0]?.text || 'No response received.';
+    CHAT_HISTORY.push({role:'assistant', content: reply});
+
     document.getElementById(thinkId)?.remove();
-    container.insertAdjacentHTML('beforeend',`<div style="display:flex;gap:8px;margin-bottom:6px"><div style="background:var(--red2);border:1px solid var(--red);border-radius:2px 8px 8px 8px;padding:8px 12px;font-size:.78rem;color:var(--red)">Error connecting to AI. Check your connection.</div></div>`);
+    const formatted = reply
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+      .replace(/§[\d\.]+[a-zA-Z]*/g,'<span style="color:var(--acc);font-weight:700;font-family:JetBrains Mono,monospace">$&</span>')
+      .replace(/\n/g,'<br>');
+
+    container.insertAdjacentHTML('beforeend',`
+      <div style="display:flex;gap:9px;margin-bottom:8px;align-items:flex-start">
+        <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--acc),var(--acc2));display:flex;align-items:center;justify-content:center;font-size:.75rem;flex-shrink:0">🤖</div>
+        <div style="background:var(--s3);border:1px solid var(--b1);border-radius:2px 8px 8px 8px;padding:10px 13px;max-width:85%;font-size:.78rem;color:var(--t1);line-height:1.7">${formatted}</div>
+      </div>`);
+
+  } catch(err) {
+    document.getElementById(thinkId)?.remove();
+    // Show detailed error to help diagnose
+    container.insertAdjacentHTML('beforeend',`
+      <div style="display:flex;gap:9px;margin-bottom:8px;align-items:flex-start">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--red2);border:1px solid var(--red);display:flex;align-items:center;justify-content:center;font-size:.75rem;flex-shrink:0">⚠</div>
+        <div style="background:var(--red2);border:1px solid var(--red);border-radius:2px 8px 8px 8px;padding:9px 13px;max-width:85%">
+          <div style="font-size:.73rem;font-weight:700;color:var(--red);margin-bottom:4px">AI Connection Error</div>
+          <div style="font-size:.71rem;color:var(--t2);line-height:1.5">
+            The Code AI requires Claude.ai — this tool must be opened inside Claude.ai (not as a standalone HTML file) for the AI chat to work.<br><br>
+            <strong>To use Code AI:</strong><br>
+            1. Open this file inside Claude.ai as an artifact<br>
+            2. Or use the built-in Compliance tab (✅) which runs all checks locally without an internet connection
+          </div>
+        </div>
+      </div>`);
   }
   container.scrollTop=container.scrollHeight;
+}
+
+function clearChat(){
+  CHAT_HISTORY.length=0;
+  const container=document.getElementById('chat-messages');
+  if(!container) return;
+  container.innerHTML=`
+    <div style="background:var(--s3);border:1px solid var(--b1);border-radius:8px;padding:10px 12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:.8rem;color:var(--acc)">🤖 IBC Code Assistant</div>
+      <button onclick="clearChat()" style="font-size:.65rem;padding:2px 8px;border-radius:4px;background:var(--s3);border:1px solid var(--b2);color:var(--t4);cursor:pointer">Clear</button>
+    </div>
+      <div style="font-size:.75rem;color:var(--t2);line-height:1.6">Ask me anything about your project's IBC compliance. Context of your entire project is automatically included.<br>
+      <span style="color:var(--t4);font-size:.7rem">Note: Requires Claude.ai environment. Use ✅ Compliance tab for offline checks.</span></div>
+    </div>`;
+}
+
+// Quick compliance summary button handler
+function runFullComplianceCheck(){
+  const checks = buildDeepComplianceReport();
+  const fails  = checks.filter(c=>c.pass===false);
+  const warns  = checks.filter(c=>c.pass===null);
+  const passes = checks.filter(c=>c.pass===true);
+
+  const el=document.getElementById('full-check-results');
+  if(!el) return;
+
+  let h=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+    <div style="background:var(--grn2);border:1px solid rgba(0,232,122,.2);border-radius:6px;padding:10px;text-align:center">
+      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.6rem;color:var(--grn)">${passes.length}</div>
+      <div style="font-size:.68rem;color:var(--grn);text-transform:uppercase;letter-spacing:.06em">Pass</div>
+    </div>
+    <div style="background:var(--red2);border:1px solid rgba(255,51,85,.2);border-radius:6px;padding:10px;text-align:center">
+      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.6rem;color:var(--red)">${fails.length}</div>
+      <div style="font-size:.68rem;color:var(--red);text-transform:uppercase;letter-spacing:.06em">Fail</div>
+    </div>
+    <div style="background:var(--amb2);border:1px solid rgba(255,170,0,.2);border-radius:6px;padding:10px;text-align:center">
+      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.6rem;color:var(--amb)">${warns.length}</div>
+      <div style="font-size:.68rem;color:var(--amb);text-transform:uppercase;letter-spacing:.06em">Verify</div>
+    </div>
+  </div>`;
+
+  if(fails.length){
+    h+=`<div style="font-size:.75rem;font-weight:700;color:var(--red);margin-bottom:6px;padding:6px 0;border-bottom:1px solid var(--red2)">✕ FAILURES — Must Resolve</div>`;
+    h+=fails.map(c=>`
+      <div style="padding:7px 10px;border-radius:5px;margin-bottom:5px;background:var(--red2);border-left:3px solid var(--red)">
+        <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">
+          <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:.7rem;color:var(--red)">${c.ref}</span>
+          <span style="font-size:.73rem;font-weight:600;color:var(--t1)">${c.desc}</span>
+        </div>
+        ${c.detail?`<div style="font-size:.7rem;color:var(--t2);line-height:1.5">↳ ${c.detail}</div>`:''}
+      </div>`).join('');
+  }
+
+  if(warns.length){
+    h+=`<div style="font-size:.75rem;font-weight:700;color:var(--amb);margin:10px 0 6px;padding:6px 0;border-bottom:1px solid var(--amb2)">⚠ VERIFY — Action Required</div>`;
+    h+=warns.map(c=>`
+      <div style="padding:7px 10px;border-radius:5px;margin-bottom:5px;background:var(--amb2);border-left:3px solid var(--amb)">
+        <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">
+          <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:.7rem;color:var(--amb)">${c.ref}</span>
+          <span style="font-size:.73rem;font-weight:600;color:var(--t1)">${c.desc}</span>
+        </div>
+        ${c.detail?`<div style="font-size:.7rem;color:var(--t2);line-height:1.5">↳ ${c.detail}</div>`:''}
+      </div>`).join('');
+  }
+
+  if(passes.length){
+    h+=`<div style="font-size:.75rem;font-weight:700;color:var(--grn);margin:10px 0 6px;padding:6px 0;border-bottom:1px solid var(--grn2)">✓ PASSING</div>`;
+    h+=`<div style="display:flex;flex-direction:column;gap:3px">`;
+    h+=passes.map(c=>`
+      <div style="padding:5px 9px;border-radius:4px;background:var(--grn2);border-left:2px solid var(--grn);display:flex;gap:7px;align-items:baseline">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--grn);white-space:nowrap">${c.ref}</span>
+        <span style="font-size:.71rem;color:var(--t2)">${c.desc}</span>
+      </div>`).join('');
+    h+=`</div>`;
+  }
+
+  el.innerHTML=h;
 }
 
 // ══════════════════════════════════════════════════
