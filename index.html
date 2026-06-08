@@ -7,15 +7,16 @@
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@300;400;500;600&display=swap');
 :root{
-  --bg:#07080c;--s1:#0c0e14;--s2:#10131b;--s3:#161a26;--s4:#1c2133;
-  --b1:#222840;--b2:#2c3555;--b3:#384268;
-  --t1:#eef0ff;--t2:#8d96c4;--t3:#4e5880;--t4:#2a3050;
-  --acc:#4d7dff;--acc2:#7c5cfc;--acc3:#00cfff;
-  --grn:#00e87a;--red:#ff3355;--amb:#ffaa00;--pur:#c45cff;--cyan:#00d4ff;
-  --grn2:rgba(0,232,122,.1);--red2:rgba(255,51,85,.1);--amb2:rgba(255,170,0,.1);
-  --accb:rgba(77,125,255,.1);
+  /* Elegant architectural palette — warm stone surfaces, ink text, blueprint-slate accent */
+  --bg:#e7e3da;--s1:#f1eee7;--s2:#f7f4ee;--s3:#fdfbf6;--s4:#ffffff;
+  --b1:#d6d0c4;--b2:#c4bdac;--b3:#ada691;
+  --t1:#272b30;--t2:#5a5e67;--t3:#898d96;--t4:#b3b4bb;
+  --acc:#3a6ea5;--acc2:#9a6a4f;--acc3:#2f8f8f;
+  --grn:#1f8a4c;--red:#c0392b;--amb:#a87a12;--pur:#7e57c2;--cyan:#2f8f8f;
+  --grn2:rgba(31,138,76,.12);--red2:rgba(192,57,43,.10);--amb2:rgba(168,122,18,.12);
+  --accb:rgba(58,110,165,.10);
   --r:8px;--r2:5px;--r3:12px;
-  --shadow:0 8px 32px rgba(0,0,0,.5);
+  --shadow:0 6px 24px rgba(45,38,26,.13);
   /* LED colors */
   --led-off:#1a1f2e;--led-off-b:#222840;
   --led-grn:#00e87a;--led-red:#ff3355;--led-amb:#ffaa00;--led-blu:#4d7dff;
@@ -191,8 +192,8 @@ td.w{color:var(--amb);font-weight:700}
   <div id="logo"><div id="logo-box">IBC</div>Design Suite 2021</div>
   <div id="hdr-gap"></div>
   <div id="tabs">
-    <button class="htab on" id="tab-fp"   onclick="showSec('fp',this)">🏛 Floor Plan</button>
     <button class="htab"    id="tab-site" onclick="showSec('site',this)">🗺 Site</button>
+    <button class="htab on" id="tab-fp"   onclick="showSec('fp',this)">🏛 Floor Plan</button>
     <button class="htab"    id="tab-circ" onclick="showSec('circuit',this)">⚡ Circuit</button>
     <button class="htab"    id="tab-comp" onclick="showSec('comp',this)">✅ Compliance</button>
     <button class="htab"    id="tab-alts" onclick="showSec('alts',this)">💡 Alternatives</button>
@@ -273,6 +274,14 @@ td.w{color:var(--amb);font-weight:700}
       <button class="tbtn" style="font-size:.65rem;padding:3px 7px;color:var(--pur);border-color:var(--pur)" onclick="setTool('elev')">+ Elev</button>
     </div>
   </div>
+  <div class="card" id="room-table-card">
+    <div class="card-t">Per-Room Code Data
+      <span style="font-size:.58rem;color:var(--t4);font-weight:400">IBC Ch.3 · Ch.6</span>
+    </div>
+    <div style="font-size:.62rem;color:var(--t4);margin-bottom:6px;line-height:1.4">Set occupancy, construction type &amp; height per room. Leave occupancy on "Auto" to detect from the room name.</div>
+    <div id="room-table"></div>
+    <div id="room-mix-summary" style="margin-top:7px"></div>
+  </div>
 </div>
 <div id="main">
 <div class="sec on" id="sec-fp">
@@ -308,6 +317,7 @@ td.w{color:var(--amb);font-weight:700}
       <button class="tbtn" id="tb-dim"    onclick="toggleDims()">📏 Dims</button>
       <button class="tbtn on" id="tb-land" onclick="toggleLand()" title="Show land boundary">🏗 Land</button>
     </div>
+    <div id="alt-instruction" style="display:none"></div>
     <canvas id="canvas" style="flex:1;display:block;min-height:0"></canvas>
     <div id="pw-indicator">▼ PUBLIC WAY — SOUTH · All exits should orient toward this side</div>
     <div id="cnote">Select · Scroll=zoom · Ctrl+drag=pan · Dbl-click room=edit · Del=remove</div>
@@ -825,8 +835,83 @@ function determineOccStrategy(){
   };
 }
 
+// ── §706 FIRE WALL GEOMETRIC PARTITION ENGINE ──────────────────────────
+// A §706 FIRE WALL (rating ≥3hr) creates legally SEPARATE BUILDINGS: each side
+// gets its own area, height, sprinkler and exit analysis. A §707 FIRE BARRIER
+// (rating 2hr) or lesser does NOT — it stays ONE building (§508 separated occ).
+function fireWallSegs(f){
+  return f.els.filter(e=>e.type==='fw' && (e.rating||3)>=3 && e.x2!==undefined && e.y2!==undefined);
+}
+function _sideKey(cx,cy,walls){
+  // Signature of which side of each §706 fire wall this point falls on
+  return walls.map(w=>{
+    const dx=w.x2-w.x, dy=w.y2-w.y;
+    const cross=dx*(cy-w.y)-dy*(cx-w.x);
+    return cross>=0?'A':'B';
+  }).join('');
+}
+function roomOccOf(r){ return getRoomEffectiveOcc(r, occ()); }
+function roomCTOf(r){ return r.ct || type(); }
+// Partition a floor into separate buildings (fire areas) by §706 fire walls.
+function computeFireAreas(floorIdx){
+  const f=S.floors[floorIdx];
+  const sp=spr();
+  const rooms=f.els.filter(e=>e.type==='room');
+  const exits=f.els.filter(e=>e.type==='exit');
+  const stairs=f.els.filter(e=>e.type==='stair');
+  const walls=fireWallSegs(f);
+  const isUpper=floorIdx>0;
+  const keyFor=(x,y)=>walls.length?_sideKey(x,y,walls):'ALL';
+  const groups={};
+  const G=k=>(groups[k]=groups[k]||{rooms:[],exits:[],stairs:[]});
+  rooms.forEach(r=>G(keyFor(r.x+r.w/2,r.y+r.h/2)).rooms.push(r));
+  exits.forEach(e=>G(keyFor(e.x,e.y)).exits.push(e));
+  stairs.forEach(s=>G(keyFor(s.x+s.w/2,s.y+s.h/2)).stairs.push(s));
+  const sfOf=r=>Math.round(ft(r.w)*ft(r.h));
+  const areas=Object.entries(groups).filter(([k,g])=>g.rooms.length>0).map(([k,g],i)=>{
+    const sf=g.rooms.reduce((t,r)=>t+sfOf(r),0);
+    // Occupancy mix within this fire area
+    const occCount={};
+    g.rooms.forEach(r=>{const o=roomOccOf(r);occCount[o]=(occCount[o]||0)+sfOf(r);});
+    const occList=Object.entries(occCount).sort((a,b)=>b[1]-a[1]);
+    const domOcc=occList[0]?occList[0][0]:occ();
+    const isMixedArea=occList.length>1;
+    // Construction type (single if all rooms agree, else project default)
+    const cts=[...new Set(g.rooms.map(roomCTOf))];
+    const ct=cts.length===1?cts[0]:type();
+    const tidx=IBC.ti[ct]!=null?IBC.ti[ct]:3;
+    // Allowable area per dominant occupancy + CT (§Table 506.2)
+    const rawArea=(getIBCRow(IBC.ma,normOcc(domOcc))||[])[tidx];
+    const baseArea=rawArea==='UL'?Infinity:(+rawArea||9000);
+    const areaLimit=baseArea===Infinity?Infinity:(sp?baseArea*3:baseArea);
+    const areaPass=sf<=areaLimit;
+    // Occupant load + required exits (§1006.3)
+    const oll=g.rooms.reduce((t,r)=>t+ol(sfOf(r),roomOccOf(r)),0);
+    const se=getIBCRow(IBC.se,normOcc(domOcc))||[49];
+    const minExits=oll>1000?4:oll>500?3:oll>se[0]?2:1;
+    const exitCount=g.exits.length+(isUpper?g.stairs.length:0);
+    const exitCountPass=exitCount>=minExits||(isUpper&&g.stairs.length>=1&&minExits<=2);
+    // Sprinkler triggers evaluated for THIS fire area's own area (§903.2)
+    const spr706=[];const _o=normOcc(domOcc);
+    if(['A-1','A-2','A-3','A-4'].includes(_o)&&sf>5000&&!sp) spr706.push('§903.2.1: Assembly fire area >5,000 SF');
+    if(_o==='E'&&sf>20000&&!sp) spr706.push('§903.2.3: Group E fire area >20,000 SF');
+    if(_o==='F-1'&&sf>12000&&!sp) spr706.push('§903.2.4: F-1 fire area >12,000 SF');
+    if(_o==='M'&&sf>12000&&!sp) spr706.push('§903.2.7: Group M fire area >12,000 SF');
+    if(_o==='S-1'&&sf>25000&&!sp) spr706.push('§903.2.9: S-1 fire area >25,000 SF');
+    if(['H-1','H-2','H-3','H-4','H-5'].includes(_o)) spr706.push('§903.2.5: H occupancy — always NFPA 13');
+    if(['I-1','I-2','I-3','I-4'].includes(_o)&&!sp) spr706.push('§903.2.6: I occupancy — NFPA 13 required');
+    if(['R-1','R-2','R-3','R-4'].includes(_o)&&!sp) spr706.push('§903.2.8: R occupancy — NFPA 13/13R required');
+    return{key:k,idx:i,name:'Building '+String.fromCharCode(65+i),rooms:g.rooms,exits:g.exits,stairs:g.stairs,
+      sf,domOcc,occList,isMixedArea,ct,areaLimit,areaPass,oll,minExits,exitCount,exitCountPass,
+      sprTriggers:spr706,needsSprinkler:spr706.length>0};
+  });
+  return{areas,walls,partitioned:walls.length>0&&areas.length>1};
+}
+
 // Step 4: update sidebar occupancy summary
 function updateOccSummary(){
+
+
   const el=document.getElementById('occ-summary');if(!el)return;
   const str=determineOccStrategy();
   if(str.allOccs.length===0){el.innerHTML='Draw rooms and assign occupancies to see analysis.';return;}
@@ -1046,10 +1131,13 @@ function initCanvas(){
 }
 function resize(){
   if(!S.canvas||!document.getElementById('sec-fp')?.classList.contains('on'))return;
-  const cw=document.getElementById('cw');if(!cw)return;
-  const used=['ftabs','undobar','toolbar','pw-indicator','cnote'].reduce((t,id)=>t+(document.getElementById(id)?.offsetHeight||0),0);
-  S.canvas.width=cw.clientWidth;
-  S.canvas.height=Math.max(200,cw.clientHeight-used);
+  // Match the canvas bitmap to its actual on-screen (CSS) size so mouse picks
+  // map 1:1 to drawing coordinates regardless of surrounding toolbars/banners.
+  const r=S.canvas.getBoundingClientRect();
+  const w=Math.max(100,Math.round(r.width));
+  const h=Math.max(200,Math.round(r.height));
+  if(S.canvas.width!==w) S.canvas.width=w;
+  if(S.canvas.height!==h) S.canvas.height=h;
   renderAll();
 }
 function renderAll(){
@@ -1361,7 +1449,8 @@ function fpZoom(factor){
 function fpFit(){S.zoom=1;S.panX=0;S.panY=0;document.getElementById('fp-zoom-pct').textContent='100%';renderAll();}
 function onWheel(e){
   e.preventDefault();const r=S.canvas.getBoundingClientRect();
-  const cx=e.clientX-r.left,cy=e.clientY-r.top;
+  const sx=r.width?S.canvas.width/r.width:1,sy=r.height?S.canvas.height/r.height:1;
+  const cx=(e.clientX-r.left)*sx,cy=(e.clientY-r.top)*sy;
   const f=e.deltaY<0?1.12:1/1.12,nz=Math.min(8,Math.max(0.1,S.zoom*f));
   S.panX=cx-(cx-S.panX)*(nz/S.zoom);S.panY=cy-(cy-S.panY)*(nz/S.zoom);
   S.zoom=nz;document.getElementById('fp-zoom-pct').textContent=Math.round(S.zoom*100)+'%';renderAll();
@@ -1378,7 +1467,10 @@ function toggleLand(){
 // ══════════════════════════════════════════════════
 function getPos(e){
   const r=S.canvas.getBoundingClientRect();
-  const wx=(e.clientX-r.left-S.panX)/S.zoom,wy=(e.clientY-r.top-S.panY)/S.zoom;
+  // Convert from CSS pixels to canvas bitmap pixels (handles any size mismatch)
+  const sx=r.width?S.canvas.width/r.width:1, sy=r.height?S.canvas.height/r.height:1;
+  const bx=(e.clientX-r.left)*sx, by=(e.clientY-r.top)*sy;
+  const wx=(bx-S.panX)/S.zoom, wy=(by-S.panY)/S.zoom;
   const g=S.gridFt*S.scale;
   return{x:wx,y:wy,sx:Math.round(wx/g)*g,sy:Math.round(wy/g)*g};
 }
@@ -1399,7 +1491,7 @@ function onDown(e){
   if(['room','fw','wall','stair','elev'].includes(S.tool)){S.drawing=true;S.ds={x:p.sx,y:p.sy};}
 }
 function onMove(e){
-  if(S.panning){const r=S.canvas.getBoundingClientRect();S.panX=S.panStart.px+(e.clientX-r.left-S.panStart.x);S.panY=S.panStart.py+(e.clientY-r.top-S.panStart.y);renderAll();return;}
+  if(S.panning){const r=S.canvas.getBoundingClientRect();const sx=r.width?S.canvas.width/r.width:1,sy=r.height?S.canvas.height/r.height:1;S.panX=S.panStart.px+(e.clientX-r.left-S.panStart.x)*sx;S.panY=S.panStart.py+(e.clientY-r.top-S.panStart.y)*sy;renderAll();return;}
   const p=getPos(e);
   if(S.drag&&S.dragEl){
     const g=S.gridFt*S.scale;S.dragEl.x=Math.round((p.x-S.dragOff.x)/g)*g;S.dragEl.y=Math.round((p.y-S.dragOff.y)/g)*g;
@@ -1528,7 +1620,7 @@ function showSec(id,btn){
   if(id==='comp')buildComp();
   if(id==='alts')buildAlts();
   if(id==='site')updateSite();
-  if(id==='fp')setTimeout(resize,50);
+  if(id==='fp'){setTimeout(resize,50);renderAltBanner();}
 }
 function addFloor(){
   S.floors.push({id:Date.now(),name:'Floor '+(S.floors.length+1),htFt:12,els:[]});
@@ -1587,6 +1679,85 @@ function updateEL(){
     <div class="eli-name">${e.label||e.type}${e.isMirror?' ↕':''}</div>
     <div class="eli-btns"><button class="eibtn ed" onclick="event.stopPropagation();editById(${e.id})">✏</button><button class="eibtn dl" onclick="event.stopPropagation();rmById(${e.id})">✕</button></div>
   </div>`).join('');
+  buildRoomTable();
+}
+
+// ── Per-room code data table (occupancy / construction type / height) ──
+function setRoomOcc(id,v){const f=F();const e=f.els.find(x=>x.id===id);if(!e)return;e.occ=v||null;saveHist();afterRoomEdit();}
+function setRoomCT(id,v){const f=F();const e=f.els.find(x=>x.id===id);if(!e)return;e.ct=v||null;saveHist();afterRoomEdit();}
+function setRoomHt(id,v){const f=F();const e=f.els.find(x=>x.id===id);if(!e)return;e.htFt=(+v)||null;saveHist();afterRoomEdit();}
+function afterRoomEdit(){
+  renderAll();buildRoomTable();updateOccSummary();
+  const cs=document.getElementById('sec-comp');
+  if(cs&&cs.classList.contains('on')){try{buildComp();}catch(e){}}
+  const as=document.getElementById('sec-alts');
+  if(as&&as.classList.contains('on')){try{buildAlts();}catch(e){}}
+  if(typeof renderAltBanner==='function')renderAltBanner();
+}
+function buildRoomTable(){
+  const host=document.getElementById('room-table');if(!host)return;
+  const f=F();const rooms=f.els.filter(e=>e.type==='room');
+  const ms=document.getElementById('room-mix-summary');
+  if(!rooms.length){host.innerHTML='<div style="font-size:.66rem;color:var(--t4);padding:3px">No rooms on this floor yet — draw a room to begin.</div>';if(ms)ms.innerHTML='';return;}
+  const OCC=Object.keys(IBC.occLabels),CT=Object.keys(IBC.ctLabel);
+  const ss="background:var(--s4);border:1px solid var(--b2);border-radius:3px;color:var(--t1);padding:2px 3px;font-size:.63rem;font-family:'JetBrains Mono',monospace;width:100%";
+  host.innerHTML=rooms.map(r=>{
+    const auto=detectRoomType(r.label);
+    const wf=Math.round(ft(r.w)),hf=Math.round(ft(r.h));
+    const occSel=`<select style="${ss}" onchange="setRoomOcc(${r.id},this.value)">
+      <option value="" ${!r.occ?'selected':''}>Auto${auto?' → '+auto:''}</option>
+      ${OCC.map(o=>`<option value="${o}" ${r.occ===o?'selected':''}>${o} · ${IBC.occLabels[o]}</option>`).join('')}
+    </select>`;
+    const ctSel=`<select style="${ss}" onchange="setRoomCT(${r.id},this.value)">
+      <option value="" ${!r.ct?'selected':''}>Project (${IBC.ctLabel[type()]||type()})</option>
+      ${CT.map(c=>`<option value="${c}" ${r.ct===c?'selected':''}>${IBC.ctLabel[c]}</option>`).join('')}
+    </select>`;
+    const htIn=`<input type="number" min="6" value="${r.htFt||''}" placeholder="floor: ${f.htFt||14}" onchange="setRoomHt(${r.id},this.value)" style="${ss}">`;
+    return `<div style="border:1px solid var(--b1);border-radius:5px;padding:5px 6px;margin-bottom:5px;background:var(--s2)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+        <span style="font-size:.67rem;font-weight:700;color:var(--t1)">${r.label||'Room'}</span>
+        <span style="font-size:.59rem;color:var(--t4);font-family:'JetBrains Mono',monospace">${wf}×${hf}′ · ${(wf*hf).toLocaleString()} SF</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr;gap:3px">
+        <label style="font-size:.57rem;color:var(--t3)">Occupancy${occSel}</label>
+        <label style="font-size:.57rem;color:var(--t3)">Construction type${ctSel}</label>
+        <label style="font-size:.57rem;color:var(--t3)">Height (ft)${htIn}</label>
+      </div>
+    </div>`;
+  }).join('');
+  buildRoomMixSummary(rooms);
+}
+function buildRoomMixSummary(rooms){
+  const ms=document.getElementById('room-mix-summary');if(!ms)return;
+  const effOcc=r=>r.occ||detectRoomType(r.label)||occ();
+  const effCT=r=>r.ct||type();
+  const occs=[...new Set(rooms.map(effOcc))];
+  const cts=[...new Set(rooms.map(effCT))];
+  const FA=computeFireAreas(S.floor);
+  const partitioned=FA.partitioned;
+  const box=(border,bg,col,title,body)=>`<div style="border:1px solid ${border};border-left:3px solid ${col};background:${bg};border-radius:5px;padding:7px 9px">
+    <div style="font-size:.67rem;font-weight:700;color:${col};margin-bottom:2px">${title}</div>
+    <div style="font-size:.62rem;color:var(--t2);line-height:1.5">${body}</div></div>`;
+  let html='';
+  if(occs.length<=1&&cts.length<=1){
+    html=box('rgba(31,138,76,.3)','var(--grn2)','var(--grn)','✓ Single occupancy & construction',
+      `All rooms: <strong>${occs[0]||occ()}</strong> / ${IBC.ctLabel[cts[0]]||cts[0]||type()}. Analyzed as one building — no §508 separation needed.`);
+  } else {
+    const parts=[];
+    if(occs.length>1) parts.push(`occupancies <strong>${occs.join(', ')}</strong>`);
+    if(cts.length>1) parts.push(`construction types <strong>${cts.map(c=>IBC.ctLabel[c]||c).join(', ')}</strong>`);
+    if(partitioned){
+      html=box('rgba(58,110,165,.3)','var(--accb)','var(--acc)','§706 Fire Wall — Separate Buildings',
+        `Mixed ${parts.join(' and ')}. A 3–4hr §706 fire wall divides this floor into <strong>${FA.areas.length} separate buildings</strong> — each side gets its own area, height, sprinkler and exit analysis. See the Compliance tab.`);
+    } else {
+      html=box('rgba(168,122,18,.3)','var(--amb2)','var(--amb)','⚑ Mixed — separation required',
+        `This floor mixes ${parts.join(' and ')}. Per IBC §508 choose one:<br>
+        • <strong>§508.3 Non-separated</strong> — one building; the most restrictive limit applies everywhere.<br>
+        • <strong>§508.4 Separated</strong> — draw a 2-hr fire <em>barrier</em> between them; still one building, each occupancy keeps its own limits.<br>
+        • <strong>§706 Fire Wall</strong> — draw a 3–4hr fire wall (🔴 FW tool) between them; creates <em>separate buildings</em>, each with independent area / sprinkler / exits.`);
+    }
+  }
+  ms.innerHTML=html;
 }
 function selEl(id){const f=F();S.sel=f.els.find(e=>e.id===id)||null;if(S.sel)showProp(S.sel);renderAll();updateEL();}
 function rmById(id){const f=F();const el=f.els.find(e=>e.id===id);if(el)removeEl(el);}
@@ -2298,15 +2469,16 @@ function computeFloor(floorIdx){
       pass:rv.sprTriggers.length===0&&issues.filter(i=>i.includes('required')).length===0};
   });
   const fwChecks=fws.map(fw=>({id:fw.id,label:fw.label||'FW',rating:fw.rating||3,pass:(fw.rating||3)>=2}));
-  const exitCountPass=exits.length>=minExits||(isUpperFloor&&stairs.length>=1);
+  const FA=computeFireAreas(floorIdx);
+  const exitCountPass=FA.partitioned ? FA.areas.every(a=>a.exitCountPass) : (exits.length>=minExits||(isUpperFloor&&stairs.length>=1));
   const travelPass=travelData.length===0||travelData.every(t=>t.pass);
   const stairOk=stairChecks.every(s=>s.pass)||(stairs.length===0&&floors<=1&&oll<=49);
   const heightPass=floorIdx<(maxStories===UL?999:maxStories);
-  const areaPass=areaLimit==='UL'||sf<=(typeof areaLimit==='number'?areaLimit:999999);
+  const areaPass=FA.partitioned ? FA.areas.every(a=>a.areaPass) : (areaLimit==='UL'||sf<=(typeof areaLimit==='number'?areaLimit:999999));
   const elevOk=!elevReq||elevPresent||floorIdx===0;
   const roomIssuePass=roomChecks.every(r=>r.pass);
   const allPass=exitCountPass&&travelPass&&stairOk&&areaPass&&elevOk&&exitChecks.every(e=>e.pass)&&fwChecks.every(f=>f.pass)&&upperFloorExitIssues.length===0;
-  return{floorIdx,floorName:f.name,o,sp,ty,oll,sf,minExits,exitCountPass,maxTD,maxActual,travelData,travelPass,exitChecks,stairChecks,stairOk,fwChecks,roomChecks,elevReq,elevPresent,elevOk,heightPass,areaPass,areaLimit,allPass,exits,stairs,elevs,fws,isUpperFloor,upperFloorExitIssues,maxStories};
+  return{floorIdx,floorName:f.name,o,sp,ty,oll,sf,minExits,exitCountPass,maxTD,maxActual,travelData,travelPass,exitChecks,stairChecks,stairOk,fwChecks,roomChecks,elevReq,elevPresent,elevOk,heightPass,areaPass,areaLimit,allPass,exits,stairs,elevs,fws,isUpperFloor,upperFloorExitIssues,maxStories,fireAreas:FA.areas,partitioned:FA.partitioned};
 }
 
 function allFloorsCompute(){
@@ -2556,7 +2728,7 @@ function runCheck(){
     _touchingPromptShown=false;
     detectTouchingOccupancies();
     showSec('comp',document.getElementById('tab-comp'));
-    setTimeout(()=>{buildComp();buildAlts();updateOccSummary();},80);
+    setTimeout(()=>{buildComp();buildAlts();updateOccSummary();renderAltBanner();},80);
   } catch(err){
     console.error('IBC Check error:',err);
     const el=document.getElementById('comp-body');
@@ -2643,6 +2815,36 @@ function buildComp(){
       ${projectAllPass?'✓ PROJECT IBC COMPLIANT':'✕ IBC ISSUES FOUND — See details below'}</div>
     <div style="font-size:.73rem;color:var(--t2);margin-top:3px">${floors} floor(s) · Occ. ${o} · Type ${IBC.ctLabel[ty]||ty} · ${sp?'NFPA 13 Sprinklered':'Unsprinklered'} · ${S.floors.reduce((t,f)=>t+floorSF(f),0).toLocaleString()} SF total</div>
   </div>`;
+
+  // §706 Separate Buildings (fire wall) panel
+  const partFloors=results.filter(r=>r.partitioned);
+  if(partFloors.length){
+    h+=`<div class="card" style="border-left:3px solid var(--acc);margin-bottom:12px">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:.83rem;color:var(--t1);margin-bottom:3px">🧱 §706 Fire Wall — Separate Buildings</div>
+      <div style="font-size:.71rem;color:var(--t2);line-height:1.55;margin-bottom:8px">Each side of a 3–4hr §706 fire wall is treated as its own building. Area, sprinkler and exits below are calculated <strong>independently per side</strong>.</div>`;
+    partFloors.forEach(r=>{
+      if(results.length>1) h+=`<div style="font-size:.7rem;color:var(--t3);font-weight:700;margin:6px 0 4px">Floor ${r.floorIdx+1}</div>`;
+      r.fireAreas.forEach(a=>{
+        const ok=a.areaPass&&a.exitCountPass;
+        const lim=a.areaLimit===Infinity?'Unlimited':a.areaLimit.toLocaleString()+' SF';
+        h+=`<div style="border:1px solid ${ok?'rgba(31,138,76,.3)':'rgba(192,57,43,.3)'};background:${ok?'var(--grn2)':'var(--red2)'};border-radius:6px;padding:8px 11px;margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+            <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:.8rem;color:var(--t1)">${a.name} · ${a.domOcc}${a.isMixedArea?' (mixed)':''}</span>
+            <span style="font-size:.68rem;font-weight:700;color:${ok?'var(--grn)':'var(--red)'}">${ok?'✓ COMPLIES':'✕ ISSUE'}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:.7rem;color:var(--t2)">
+            <div>Area: <strong style="color:${a.areaPass?'var(--grn)':'var(--red)'}">${a.sf.toLocaleString()} / ${lim}</strong></div>
+            <div>Exits: <strong style="color:${a.exitCountPass?'var(--grn)':'var(--red)'}">${a.exitCount} / ${a.minExits} req</strong></div>
+            <div>Occupant load: <strong>${a.oll}</strong></div>
+            <div>Sprinkler: <strong style="color:${a.needsSprinkler?'var(--red)':'var(--grn)'}">${a.needsSprinkler?'Required':'Not triggered'}</strong></div>
+          </div>
+          ${a.sprTriggers.length?`<div style="font-size:.65rem;color:var(--red);margin-top:4px">${a.sprTriggers.join(' · ')}</div>`:''}
+          ${!a.exitCountPass?`<div style="font-size:.65rem;color:var(--red);margin-top:4px">Add ${Math.max(0,a.minExits-a.exitCount)} exit(s) on this side — separate buildings need their own egress.</div>`:''}
+        </div>`;
+      });
+    });
+    h+=`</div>`;
+  }
 
   // OCC + CT recommendations
   h+=`<div class="card" style="border-left:3px solid ${occCtRec.every(r=>r.type==='pass')?'var(--grn)':'var(--amb)'}">
@@ -2779,6 +2981,7 @@ function ck(title,ref,pass,body){
 // ══════════════════════════════════════════════════
 // ALTERNATIVES
 // ══════════════════════════════════════════════════
+let LAST_ALL_OPTIONS=[];
 function buildAlts(){
   const el=document.getElementById('alts-body');if(!el)return;
   const allData=allFloorsCompute();
@@ -2808,6 +3011,12 @@ function buildAlts(){
   if(occStr&&(occStr.isMixed||occStr.hasFW)){
     h+=occStrategyCards(occStr,mixedAnalysis,sp);
   }
+
+  // ── PLAIN-LANGUAGE HOW-TO ───────────────────────────────────────────
+  h+=`<div style="background:var(--s3);border:1px solid var(--b1);border-radius:7px;padding:10px 13px;margin-bottom:12px">
+    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:.78rem;color:var(--t1);margin-bottom:4px">How this tab works</div>
+    <div style="font-size:.73rem;color:var(--t2);line-height:1.6">Each card below is a different way to make your building comply with the IBC. Pick the one that fits your budget and design. <strong>When you click a card, the exact change you need to make appears as a banner on the Floor Plan tab.</strong> Make that change, then press <strong>▶ Run IBC Check</strong> — the banner turns green once the issue is resolved.</div>
+  </div>`;
 
   // ── COMPLIANCE ALTERNATIVES ────────────────────────────────────────
   h+=`<div style="font-size:.75rem;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;margin:14px 0 8px">Code Compliance Paths — Click to Select</div>`;
@@ -2898,6 +3107,10 @@ function buildAlts(){
      applicable: sf>maxAreaNS&&floors===1,
      recommended: false},
   ];
+
+  // Cache all selectable options (alts + §508 mixed-occupancy paths) for the Floor Plan banner
+  LAST_ALL_OPTIONS=alts.map(a=>({id:a.id,icon:a.icon,title:a.title,action:a.action}))
+    .concat(((mixedAnalysis&&mixedAnalysis.paths)||[]).map(p=>({id:p.id,icon:p.icon,title:p.label,action:p.req||p.desc})));
 
   // Cost comparison bar chart
   const costItems=[
@@ -2995,7 +3208,32 @@ function occStrategyCards(occStr,mixedAnalysis,sp){
   </div>`;
 }
 
-function chooseAlt(id){S.chosenAlt=S.chosenAlt===id?null:id;buildAlts();}
+function chooseAlt(id){S.chosenAlt=S.chosenAlt===id?null:id;buildAlts();renderAltBanner();}
+
+// Floor Plan instruction banner — shows the action for the selected alternative,
+// and flips to a resolved state once all IBC checks pass.
+function renderAltBanner(){
+  const el=document.getElementById('alt-instruction');if(!el)return;
+  if(!S.chosenAlt){el.style.display='none';el.innerHTML='';return;}
+  if(!LAST_ALL_OPTIONS.length){try{buildAlts();}catch(e){}}
+  const opt=LAST_ALL_OPTIONS.find(o=>o.id===S.chosenAlt);
+  if(!opt){el.style.display='none';el.innerHTML='';return;}
+  let fails=[];try{fails=buildDeepComplianceReport().filter(c=>c.pass===false);}catch(e){}
+  const resolved=fails.length===0;
+  const col=resolved?'var(--grn)':'var(--amb)';
+  const bg=resolved?'var(--grn2)':'var(--amb2)';
+  el.style.display='block';
+  el.innerHTML=`<div style="display:flex;align-items:flex-start;gap:10px;background:${bg};border:1px solid ${col};border-left:4px solid ${col};border-radius:6px;padding:9px 13px;margin:6px 10px 0">
+    <span style="font-size:1.3rem;line-height:1.2;flex-shrink:0">${resolved?'✓':(opt.icon||'📐')}</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:.8rem;color:${col};margin-bottom:2px">
+        ${resolved?'Resolved — '+opt.title:'Selected fix: '+opt.title}</div>
+      <div style="font-size:.74rem;color:var(--t1);line-height:1.55">${resolved?'All IBC checks are passing for the selected strategy.':(opt.action||'Apply this change on the plan, then run the IBC check.')}</div>
+      ${resolved?'':`<div style="font-size:.67rem;color:var(--t3);margin-top:4px">${fails.length} issue(s) remaining — make the change above, then press ▶ Run IBC Check</div>`}
+    </div>
+    <button onclick="chooseAlt(null)" title="Dismiss" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:1rem;line-height:1;flex-shrink:0">✕</button>
+  </div>`;
+}
 
 // ══════════════════════════════════════════════════
 // CODE AI CHAT
@@ -3039,37 +3277,63 @@ function buildDeepComplianceReport(){
     fail('§Table 504.4',`Height ${totalHtFt}ft exceeds ${ty} limit of ${maxHtN==='UL'?'UL':maxHtN+'ft'}`,`Upgrade to I-A (UL) or I-B (160ft), or NFPA 13 +20ft (§504.4)`);
   else pass('§Table 504.4',`Height ${totalHtFt}ft / ${maxHtN==='UL'?'Unlimited':maxHtN+'ft'} max`);
 
-  // §506.2 Area
+  // §506.2 Area — analyzed per §706 fire area (separate building) when fire walls present
   const maxAN=(getIBCRow(IBC.ma,normOcc(o))||[])[tidx];const maxANum=maxAN==='UL'?99999:+maxAN||9000;
   const effectiveMax=sp?Math.min(maxANum*3,99999):maxANum;
-  if(maxSFFloor>effectiveMax)
+  const anyPartitioned=all.results.some(r=>r.partitioned);
+  if(anyPartitioned){
+    all.results.forEach(r=>{
+      if(r.partitioned){
+        r.fireAreas.forEach(a=>{
+          const lim=a.areaLimit===Infinity?'Unlimited':a.areaLimit.toLocaleString()+' SF';
+          if(a.areaPass) pass('§706 + §Table 506.2',`${a.name} (${a.domOcc}): ${a.sf.toLocaleString()} / ${lim}`,'Separate building per §706 fire wall — area calculated independently for this side.');
+          else fail('§706 + §Table 506.2',`${a.name} (${a.domOcc}): ${a.sf.toLocaleString()} SF exceeds ${lim}`,'Even treated as its own §706 building, this side is over the limit — add NFPA 13 (×3 area), upgrade construction type, or subdivide further.');
+        });
+      } else {
+        if(r.sf>effectiveMax) fail('§Table 506.2',`Floor ${r.floorIdx+1} area ${r.sf.toLocaleString()} SF exceeds ${sp?'sprinklered':'NS'} limit of ${effectiveMax>=99999?'UL':effectiveMax.toLocaleString()+' SF'}`,`Options: §706 fire wall subdivision, upgrade CT, add sprinklers (§506.3 area ×3)`);
+        else pass('§Table 506.2',`Floor ${r.floorIdx+1} area ${r.sf.toLocaleString()}/${effectiveMax>=99999?'UL':effectiveMax.toLocaleString()+' SF'} ${sp?'(×3 §506.3)':''}`);
+      }
+    });
+  } else if(maxSFFloor>effectiveMax)
     fail('§Table 506.2',`Floor area ${maxSFFloor.toLocaleString()} SF exceeds ${sp?'sprinklered':'NS'} limit of ${effectiveMax>=99999?'UL':effectiveMax.toLocaleString()+' SF'}`,`Options: §706 fire wall subdivision, upgrade CT, add sprinklers (§506.3 area ×3)`);
   else pass('§Table 506.2',`Area ${maxSFFloor.toLocaleString()}/${effectiveMax>=99999?'UL':effectiveMax.toLocaleString()+' SF'} ${sp?'(×3 §506.3)':''}`);
 
   // §601 Type
   warn('§Table 601',`Type ${ty} structural ratings — verify with engineer`,`All structural elements must meet Table 601 ratings: ${ty}`);
 
-  // §706 Fire walls
-  const hasFW=S.floors.some(f=>f.els.some(e=>e.type==='fw'));
-  if(hasFW) warn('§706','Fire wall(s) present — verify rating, continuity, structural independence','§706.5: must extend to/through roof. §706.4: structural independence. §716.5: rated openings.');
-  if(all.hasMixed) warn('§Table 508.4','Mixed occ fire barriers required',all.mixedAnalysis?.pairs?.map(p=>`${p.a}/${p.b}: ${p.hr}-hr`).join(', ')||'');
+  // §706 vs §707 — separate buildings vs separated occupancy (one building)
+  const hasFireWall=S.floors.some(f=>f.els.some(e=>e.type==='fw'&&(e.rating||3)>=3));
+  const hasFireBarrier=S.floors.some(f=>f.els.some(e=>e.type==='fw'&&(e.rating||3)===2));
+  if(hasFireWall)
+    pass('§706','§706 FIRE WALL → SEPARATE BUILDINGS','Each side is analyzed as its own building for area, height, sprinkler and exits. Verify: 3–4hr rating (§706.2), structural independence (§706.4), continuity to/through roof (§706.5), rated openings (§716.5).');
+  if(hasFireBarrier)
+    warn('§707','§707 FIRE BARRIER → STILL ONE BUILDING','A fire barrier separates occupancies (§508.4) but does NOT create separate buildings — area and (generally) sprinkler are evaluated for the whole building. For separate-building treatment use a 3–4hr §706 fire wall.');
+  if(all.hasMixed) warn('§Table 508.4','Mixed occupancy — fire barriers required on §508.4 path',all.mixedAnalysis?.pairs?.map(p=>`${p.a}/${p.b}: ${p.hr}-hr`).join(', ')||'');
 
   // §1020 Corridor ratings
   all.results.forEach(r=>{
     if(r.oll>30) warn('§1020.1',`Floor ${r.floorIdx+1}: corridor rating 1-hr (OL=${r.oll}>30)`,`§1020.1 + §1020.2: 1-hr corridor walls, 20-min rated doors with self-closers.`);
   });
 
-  // §903.2 Sprinkler triggers
+  // §903.2 Sprinkler triggers — AREA-based triggers evaluated per §706 fire area
   const sprTriggers=[];
-  if(['M'].includes(normOcc(o))&&maxSFFloor>12000&&!sp)  sprTriggers.push(`§903.2.7: Group M fire area ${maxSFFloor.toLocaleString()}SF >12,000 SF`);
-  if(['A-1','A-2'].includes(normOcc(o))&&maxSFFloor>5000&&!sp) sprTriggers.push(`§903.2.1: Assembly >5,000 SF`);
+  if(anyPartitioned){
+    all.results.forEach(r=>{
+      if(r.partitioned) r.fireAreas.forEach(a=>a.sprTriggers.forEach(t=>sprTriggers.push(`${a.name}: ${t}`)));
+      else (r.fireAreas||[]).forEach(a=>a.sprTriggers.forEach(t=>sprTriggers.push(t)));
+    });
+  } else {
+    if(['M'].includes(normOcc(o))&&maxSFFloor>12000&&!sp)  sprTriggers.push(`§903.2.7: Group M fire area ${maxSFFloor.toLocaleString()}SF >12,000 SF`);
+    if(['A-1','A-2'].includes(normOcc(o))&&maxSFFloor>5000&&!sp) sprTriggers.push(`§903.2.1: Assembly >5,000 SF`);
+    if(normOcc(o)==='E'&&!sp) sprTriggers.push(`§903.2.3: Group E (exceptions in §903.2.3 exception)`);
+  }
+  // Height / stories triggers always apply — a §706 fire wall does NOT reset building height
   if(totalHtFt>55&&!sp)  sprTriggers.push(`§903.2.6: Height ${totalHtFt}ft >55ft`);
   if(totalHtFt>75)        sprTriggers.push(`§903.2.11.3: High-rise >75ft — mandatory`);
   if(o==='R-2'&&totalFloors>=4&&!sp) sprTriggers.push(`§903.2.8: R-2 ≥4 stories`);
-  if(normOcc(o)==='E'&&!sp) sprTriggers.push(`§903.2.3: Group E (exceptions in §903.2.3 exception)`);
   if(sprTriggers.length) fail('§903.2','Sprinkler system REQUIRED',sprTriggers.join(' | '));
   else if(sp) pass('§903.2','NFPA 13 provided — §506.3 area ×3, §504.4 +20ft, §1017 +50ft travel active');
-  else pass('§903.2','No mandatory sprinkler triggers for this project');
+  else pass('§903.2',anyPartitioned?'No sprinkler triggers — each §706 fire area is under its own area threshold':'No mandatory sprinkler triggers for this project');
 
   // §904.12 Kitchen
   if(allRooms.some(r=>(r.label||'').toLowerCase().includes('kitchen')))
@@ -3077,7 +3341,12 @@ function buildDeepComplianceReport(){
 
   // §1006 Exits per floor
   all.results.forEach(r=>{
-    if(r.exitCountPass) pass('§Table 1006.3.4',`Floor ${r.floorIdx+1}: ${r.exits.length} exit(s) / ${r.minExits} required (OL=${r.oll})`);
+    if(r.partitioned){
+      r.fireAreas.forEach(a=>{
+        if(a.exitCountPass) pass('§706 + §1006.3',`${a.name} (${a.domOcc}): ${a.exitCount} exit(s) / ${a.minExits} required (OL=${a.oll})`,'Each §706 fire area must have its own independent means of egress.');
+        else fail('§706 + §1006.3',`${a.name} (${a.domOcc}): ${a.exitCount} exit(s), needs ${a.minExits} (OL=${a.oll})`,`Add ${Math.max(0,a.minExits-a.exitCount)} exit(s) on THIS side of the fire wall — separate buildings cannot share exits. §1015: separation ≥½ diagonal.`);
+      });
+    } else if(r.exitCountPass) pass('§Table 1006.3.4',`Floor ${r.floorIdx+1}: ${r.exits.length} exit(s) / ${r.minExits} required (OL=${r.oll})`);
     else fail('§1006.3',`Floor ${r.floorIdx+1}: ${r.exits.length} exits, need ${r.minExits} (OL=${r.oll})`,`Add ${r.minExits-r.exits.length} exit(s). §1015: separation ≥½ diagonal of room.`);
     if(r.travelData.length){
       const bad=r.travelData.filter(t=>!t.pass);
@@ -3570,7 +3839,7 @@ function runFullComplianceCheck(){
 // INIT
 // ══════════════════════════════════════════════════
 function init(){
-  buildFloorTabs();buildFList();updateStats();
+  buildFloorTabs();buildFList();updateStats();updateEL();
   initCanvas();saveHist();setTool('select');
   // init land toggle button state
   document.getElementById('tb-land')?.classList.add('on');
