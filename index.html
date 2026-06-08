@@ -197,7 +197,7 @@ td.w{color:var(--amb);font-weight:700}
     <button class="htab"    id="tab-circ" onclick="showSec('circuit',this)">⚡ Circuit</button>
     <button class="htab"    id="tab-comp" onclick="showSec('comp',this)">✅ Compliance</button>
     <button class="htab"    id="tab-alts" onclick="showSec('alts',this)">💡 Alternatives</button>
-    <button class="htab"    id="tab-chat" onclick="showSec('chat',this)">🤖 Code AI</button>
+    <button class="htab"    id="tab-chat" onclick="showSec('chat',this)">🤖 Chat Assistant</button>
     <button class="htab"    id="circuit-b-tab" onclick="showSec('circuit-b',this)">⬡ Circuit Analyzer</button>
     <div style="width:1px;height:20px;background:var(--b1);margin:0 4px"></div>
     <button class="tbtn" style="font-size:.72rem;background:linear-gradient(135deg,#4d7dff,#7c5cfc);color:#fff;border:none;padding:5px 13px;border-radius:4px;cursor:pointer;white-space:nowrap" onclick="syncToCircuit()">⟳ Sync → Circuit</button>
@@ -275,7 +275,7 @@ td.w{color:var(--amb);font-weight:700}
     </div>
   </div>
   <div class="card" id="room-table-card">
-    <div class="card-t">Per-Room Code Data
+    <div class="card-t">Per-Space Code Data
       <span style="font-size:.58rem;color:var(--t4);font-weight:400">IBC Ch.3 · Ch.6</span>
     </div>
     <div style="font-size:.62rem;color:var(--t4);margin-bottom:6px;line-height:1.4">Set occupancy, construction type &amp; height per room. Leave occupancy on "Auto" to detect from the room name.</div>
@@ -303,8 +303,8 @@ td.w{color:var(--amb);font-weight:700}
     <div id="toolbar">
       <button class="tbtn on" id="tb-select" onclick="setTool('select')">▸ Select</button>
       <div class="tsep"></div>
-      <button class="tbtn" id="tb-room"   onclick="setTool('room')">🔲 Room</button>
-      <button class="tbtn" id="tb-wall"   onclick="setTool('wall')">— Wall</button>
+      <button class="tbtn" id="tb-room"   onclick="setTool('room')">🔲 Space</button>
+      <button class="tbtn" id="tb-wall"   onclick="setTool('wall')" title="Non-rated partition — layout/drafting only, no code effect. For code separation use Fire Barrier (§707) or Fire Wall (§706).">— Partition</button>
       <div class="tsep"></div>
       <button class="tbtn" id="tb-exit"   onclick="setTool('exit')">🚪 Exit</button>
       <button class="tbtn" id="tb-fw"     onclick="setTool('fw')">🔴 Fire Wall</button>
@@ -637,29 +637,44 @@ const IBC={
   elevRequired(floors,sfPF){if(floors<=1)return false;if(floors===2&&sfPF<3000)return false;return true;},
   // §1011 stair dims
   stair:{minW200:44,minW49:36},
-  // §303 — Space-name → occupancy group detection (expanded)
+  // §303 — Space-name → occupancy group detection (comprehensive Chapter 3)
+  // Matching is whole-word and specificity-ordered (longest phrase wins), so e.g.
+  // "courtroom"→A-3 beats "court"→A-4, and "animal hospital"→B beats "hospital"→I-2.
+  // Pure circulation/support spaces (lobby, corridor, restroom, mechanical, electrical,
+  // closet, etc.) are intentionally omitted — they inherit the building's occupancy.
   roomTypes:{
-    'A-1':['theater','cinema','concert hall','amphitheater','opera','playhouse','motion picture'],
-    'A-2':['restaurant','dining','cafeteria','bar','lounge','bistro','cafe','food court','banquet','nightclub','brewery','tavern','pub'],
-    'A-3':['assembly hall','auditorium','gym','gymnasium','chapel','church','worship','recreation room','ballroom','lecture hall','museum','library','waiting room','exhibition','art gallery','bowling'],
-    'A-4':['arena','court','rink','pool','natatorium','sports','bleacher'],
-    'B': ['office','business','conference room','lobby','reception','bank','professional','clinic','outpatient','ambulatory'],
-    'E': ['classroom','school','kindergarten','daycare','childcare','education','training room','learning'],
-    'F-1':['factory','manufacturing','laundry','dry cleaning','printing','woodwork','automobile repair'],
-    'F-2':['brewery','creamery','ice plant','power plant','glass products','foundry'],
-    'H': ['hazardous','flammable','explosive','chemical','paint booth','spray'],
-    'I-1':['assisted living','group home','halfway house','residential care'],
-    'I-2':['patient room','hospital','nursing home','nursing','detention medical','surgical','icu','psychiatric'],
-    'I-3':['jail','prison','detention','correctional','holding'],
-    'I-4':['daycare','adult day care','preschool'],
-    'M': ['retail','store','market','shop','showroom','sales','mercantile','department store','supermarket','drug store'],
-    'R-1':['hotel','motel','hostel','inn','boarding house','transient'],
-    'R-2':['apartment','residential','dwelling','unit','suite','bedroom','dormitory','condominium','fraternity','sorority'],
-    'R-3':['single family','townhouse','duplex','triplex'],
-    'R-4':['residential care','assisted','group home 6-16'],
-    'S-1':['storage','warehouse','parking garage','self storage','motor vehicle storage'],
-    'S-2':['low hazard storage','cold storage','parking'],
-    'U': ['utility','agricultural','barn','carport','shed','greenhouse','stable','tank'],
+    // ── ASSEMBLY ─────────────────────────────────────────────
+    'A-1':['theater','theatre','movie theater','cinema','concert hall','symphony hall','opera house','opera','playhouse','performing arts','motion picture','television studio','radio studio'],
+    'A-2':['restaurant','dining room','dining hall','dining','cafeteria','cafe','coffee shop','bar','cocktail lounge','lounge','bistro','food court','banquet hall','banquet','nightclub','night club','tavern','pub','brewpub','taproom','beer garden','casino','gaming','mess hall','canteen','snack bar'],
+    'A-3':['assembly hall','assembly','auditorium','lecture hall','lecture room','church','chapel','sanctuary','worship','mosque','synagogue','temple','library','museum','art gallery','gallery','community hall','community center','recreation hall','recreation room','rec room','ballroom','dance hall','exhibition hall','exhibition','convention','conference center','funeral home','funeral parlor','mortuary','bowling alley','bowling','arcade','billiard','pool hall','gymnasium','gym','fitness center','fitness','health club','courtroom','indoor pool','natatorium','planetarium','aquarium','passenger terminal','transit waiting','waiting area','waiting room','place of worship','student union','multipurpose room'],
+    'A-4':['arena','indoor stadium','skating rink','ice rink','tennis court','basketball court','racquetball court','squash court','indoor sports','sports arena','spectator'],
+    'A-5':['outdoor stadium','grandstand','bleacher','amusement park','fairground','ballpark','racetrack','outdoor amphitheater'],
+    // ── BUSINESS ─────────────────────────────────────────────
+    'B': ['office','offices','business','conference room','meeting room','board room','boardroom','reception','bank','financial','professional service','clinic','outpatient','medical office','dental office','dental','dentist','doctor','physician','exam room','treatment room','ambulatory care','ambulatory','urgent care','barber','barbershop','salon','beauty','hair salon','nail salon','spa','car wash','dry cleaning pickup','college','university','higher education','laboratory','research lab','testing lab','post office','print shop','copy center','telephone exchange','data center','server room','call center','training room','training','city hall','civic','courthouse','police station','fire station','dispatch','control room','administration','admin','workstation','cubicle','veterinary clinic','animal hospital','animal clinic','pharmacy office','radio station','tv station'],
+    // ── EDUCATIONAL (≤12th grade, child daycare >5 over 2.5yr) ─
+    'E': ['classroom','class room','school','elementary','middle school','high school','grade school','kindergarten','nursery school','preschool','pre-school','daycare','day care','childcare','child care','education','learning center','schoolroom','homeroom'],
+    // ── FACTORY / INDUSTRIAL ─────────────────────────────────
+    'F-1':['factory','manufacturing','fabrication','assembly line','machine shop','woodworking','woodwork','metalworking','welding','processing plant','plant','mill','sawmill','commercial bakery','commercial laundry','laundry plant','dry cleaning plant','printing plant','textile','garment','automotive repair','auto repair','body shop','repair shop','workshop','production','cabinet shop'],
+    'F-2':['foundry','glass factory','glass products','brick plant','ceramics','ice plant','creamery','gypsum','metal products','noncombustible manufacturing'],
+    // ── HIGH HAZARD ──────────────────────────────────────────
+    'H': ['hazardous','explosive','flammable storage','flammable liquid','chemical storage','spray booth','paint booth','fuel storage','propane','ammunition','fireworks','refinery','hazmat','oxidizer','toxic','combustible dust'],
+    // ── INSTITUTIONAL ────────────────────────────────────────
+    'I-1':['assisted living','group home','halfway house','congregate care','social rehabilitation','alcohol rehab','sober living','convalescent'],
+    'I-2':['hospital','patient room','nursing home','skilled nursing','intensive care','icu','operating room','surgery','surgical','emergency room','maternity','psychiatric hospital','infirmary','recovery room','inpatient','hospice','detoxification','nursing unit'],
+    'I-3':['jail','prison','correctional','detention','holding cell','penitentiary','reformatory','prerelease'],
+    'I-4':['adult day care','adult daycare','child day care','infant care','toddler care','custodial care','memory care','day care center'],
+    // ── MERCANTILE ───────────────────────────────────────────
+    'M': ['retail','store','retail store','market','supermarket','grocery','shop','showroom','sales floor','sales','mercantile','department store','drug store','drugstore','pharmacy','gas station','service station','fuel dispensing','convenience store','shopping mall','mall','boutique','dealership','garden center','liquor store','hardware store','shopping'],
+    // ── RESIDENTIAL ──────────────────────────────────────────
+    'R-1':['hotel','motel','hostel','boarding house','bed and breakfast','lodge','resort','transient lodging','guest room','inn'],
+    'R-2':['apartment','dwelling unit','condominium','condo','dormitory','dorm','fraternity','sorority','multifamily','multi-family','tenement','live work','live-work','efficiency unit','studio apartment'],
+    'R-3':['single family','single-family','townhouse','townhome','duplex','two family','two-family','rowhouse','cottage','bungalow','triplex'],
+    'R-4':['residential care','assisted living facility','group care','small care facility'],
+    // ── STORAGE ──────────────────────────────────────────────
+    'S-1':['warehouse','self storage','self-storage','mini storage','storage','storeroom','stockroom','distribution','fulfillment','freight','depot','lumber storage','repair garage','motor vehicle storage'],
+    'S-2':['parking garage','parking structure','parking','car park','covered parking','cold storage','refrigerated storage','noncombustible storage','vehicle storage'],
+    // ── UTILITY / MISC ───────────────────────────────────────
+    'U': ['utility building','agricultural','barn','carport','shed','greenhouse','stable','silo','grain silo','tank structure','pump house','tower','gazebo','livestock','private garage','detached garage'],
   },
   // §509 — Incidental uses that need separation regardless of main occupancy
   incidentalUses:{
@@ -732,13 +747,115 @@ function getIBCRow(table,o){
 const ol=(sf,o)=>Math.ceil(sf/getOLF(o));
 
 // ── Room name → IBC occupancy detection (§303) ──────────────────────────
-function detectRoomType(label){
-  if(!label) return null;
-  const n=label.toLowerCase();
+// Flatten the use map into [phrase, occ] pairs sorted most-specific-first so the
+// longest matching phrase wins. Matching is whole-word (with simple plurals) to
+// avoid false hits like "bar"→"barber" or "court"→"courtyard".
+let _USE_INDEX=null;
+function _buildUseIndex(){
+  const pairs=[];
   for(const [occKey,words] of Object.entries(IBC.roomTypes)){
-    if(words.some(w=>n.includes(w))) return occKey;
+    words.forEach(w=>pairs.push([w.toLowerCase(),occKey]));
+  }
+  pairs.sort((a,b)=>{
+    const wa=a[0].split(' ').length, wb=b[0].split(' ').length;
+    if(wb!==wa) return wb-wa;          // more words = more specific
+    return b[0].length-a[0].length;    // then longer string
+  });
+  _USE_INDEX=pairs;
+}
+function detectRoomUse(label){
+  if(!label) return null;
+  if(!_USE_INDEX) _buildUseIndex();
+  const n=' '+String(label).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()+' ';
+  for(const [phrase,occKey] of _USE_INDEX){
+    const p=' '+phrase+' ';
+    if(n.includes(p)) return {occ:occKey,use:phrase};
+    if(!phrase.includes(' ')){ // allow simple plural for single-word uses
+      if(n.includes(' '+phrase+'s ')||n.includes(' '+phrase+'es ')) return {occ:occKey,use:phrase};
+    }
   }
   return null;
+}
+function detectRoomType(label){const r=detectRoomUse(label);return r?r.occ:null;}
+
+// ── §508.2 ACCESSORY OCCUPANCY EVALUATION ──────────────────────────────
+// Evaluates each room on a story against §508.2 criteria:
+//   (1) different occupancy than the story's primary (dominant) occupancy
+//   (2) ancillary/subordinate (user judgment via the room's accessory dropdown)
+//   (3) aggregate accessory area ≤ 10% of the story area (§508.2.1)
+// room.accessory = 'auto' | 'yes' | 'no'  (default 'auto')
+function storyAccessoryEval(floorIdx){
+  const f=S.floors[floorIdx]; if(!f) return null;
+  const rooms=f.els.filter(e=>e.type==='room');
+  const sfOf=r=>Math.round(ft(r.w)*ft(r.h));
+  const storySF=rooms.reduce((t,r)=>t+sfOf(r),0)||1;
+  const bySF={}; rooms.forEach(r=>{const o=r.occ||detectRoomType(r.label)||occ(); bySF[o]=(bySF[o]||0)+sfOf(r);});
+  const dominant=Object.entries(bySF).sort((a,b)=>b[1]-a[1])[0]?.[0]||occ();
+  const evalRooms=rooms.map(r=>{
+    const o=r.occ||detectRoomType(r.label)||occ();
+    const choice=r.accessory||'auto';
+    const sf=sfOf(r);
+    const differentOcc=o!==dominant;
+    // candidate = a non-primary space the user hasn't excluded
+    const candidate=differentOcc && choice!=='no';
+    return {r,id:r.id,occ:o,choice,sf,differentOcc,candidate};
+  });
+  const candSF=evalRooms.filter(x=>x.candidate).reduce((t,x)=>t+x.sf,0);
+  const aggPct=candSF/storySF;
+  const withinAgg=aggPct<=0.10;
+  evalRooms.forEach(x=>{
+    x.pct=x.sf/storySF;
+    // §508.2 satisfied only if different occ, not excluded, and aggregate ≤10%
+    x.isAccessory = x.candidate && withinAgg && (x.choice==='yes'||x.choice==='auto');
+    x.forcedYesButOver = x.choice==='yes' && x.differentOcc && !withinAgg;
+  });
+  return {dominant,storySF,evalRooms,candSF,aggPct,withinAgg};
+}
+function roomAccessoryInfo(roomId,floorIdx){
+  const ev=storyAccessoryEval(floorIdx); if(!ev) return null;
+  const x=ev.evalRooms.find(e=>e.id===roomId); if(!x) return null;
+  return Object.assign({},x,{dominant:ev.dominant,storySF:ev.storySF,aggPct:ev.aggPct,withinAgg:ev.withinAgg});
+}
+function accessoryEvalHTML(info,e){
+  if(!info) return '';
+  const choice=e.accessory||'auto';
+  const pct=(info.pct*100).toFixed(1), agg=(info.aggPct*100).toFixed(1);
+  const same=!info.differentOcc;
+  let verdict,vcol,vbg,vnote;
+  if(same){
+    verdict='Not applicable — same as primary';vcol='var(--t3)';vbg='var(--s3)';
+    vnote=`This space (${info.occ}) is the story's primary occupancy, so §508.2 does not apply.`;
+  } else if(choice==='no'){
+    verdict='Excluded — separate occupancy';vcol='var(--amb)';vbg='var(--amb2)';
+    vnote='Analyzed as a mixed occupancy (§508.3 non-separated or §508.4 separated), not accessory.';
+  } else if(info.isAccessory){
+    verdict='✓ Qualifies as Accessory (§508.2)';vcol='var(--grn)';vbg='var(--grn2)';
+    vnote='No occupancy separation required. Allowable area, height & stories follow the PRIMARY occupancy. The space is still classified per Ch.3, and its own occupant load, egress & fire protection still apply.';
+  } else if(choice==='yes'&&!info.withinAgg){
+    verdict='✕ Cannot be accessory — exceeds 10% (§508.2.1)';vcol='var(--red)';vbg='var(--red2)';
+    vnote=`Aggregate accessory area is ${agg}% of the story (10% max). Treat as mixed occupancy or reduce the accessory area.`;
+  } else {
+    verdict='Mixed occupancy — over 10% aggregate';vcol='var(--amb)';vbg='var(--amb2)';
+    vnote=`Aggregate accessory area is ${agg}% of the story (>10%), so §508.2 does not apply. Use §508.3 or §508.4.`;
+  }
+  const row=(q,a)=>`<div style="display:flex;justify-content:space-between;gap:8px;font-size:.66rem;padding:2px 0"><span style="color:var(--t3)">${q}</span><span style="color:var(--t1);font-family:'JetBrains Mono',monospace;font-weight:600;text-align:right">${a}</span></div>`;
+  return `<div style="border:1px solid ${vcol};background:${vbg};border-radius:5px;padding:8px 10px;margin:2px 0 8px">
+    <div style="font-size:.72rem;font-weight:700;color:${vcol};margin-bottom:5px">${verdict}</div>
+    ${row('Space occupancy',info.occ)}
+    ${row('Primary occupancy (story)',info.dominant)}
+    ${row('Space area',info.sf.toLocaleString()+' SF ('+pct+'%)')}
+    ${row('Story area',info.storySF.toLocaleString()+' SF')}
+    ${row('Aggregate accessory',agg+'% of story (≤10%)')}
+    <div style="font-size:.63rem;color:var(--t2);line-height:1.5;margin-top:5px;padding-top:5px;border-top:1px solid var(--b1)">${vnote}</div>
+  </div>`;
+}
+function onAccessoryChange(){
+  const sel=document.getElementById('m-accessory'); if(!sel) return;
+  const f=F(); const e=f.els.find(x=>x.id===_eid); if(!e) return;
+  e.accessory=sel.value||'auto';
+  const box=document.getElementById('m-accessory-eval');
+  if(box) box.innerHTML=accessoryEvalHTML(roomAccessoryInfo(e.id,S.floor),e);
+  renderAll(); if(typeof buildRoomTable==='function') buildRoomTable(); updateOccSummary();
 }
 // ── §303/§508/§706 OCCUPANCY DETERMINATION ENGINE ──────────────────────────
 // Step 1: effective occupancy of each room
@@ -768,7 +885,11 @@ function classifyFloorOccupancies(floorEls, fallbackOcc){
   sorted.forEach(g=>{
     const pct=totalSF>0?g.sf/totalSF:0;
     g.pct=pct;
-    g.isAccessory = g.occ!==dominant && pct<=0.10;
+    const _ch=(g.rooms||[]).map(r=>r.accessory||'auto');
+    let _acc=g.occ!==dominant && pct<=0.10;
+    if(_ch.includes('no')) _acc=false;
+    if(_ch.length&&_ch.every(c=>c==='yes')&&g.occ!==dominant&&pct<=0.10) _acc=true;
+    g.isAccessory = _acc;
     g.isPrimary   = g.occ===dominant;
   });
   return{groups:sorted,dominant,totalSF,uniqueOccs:[...new Set(sorted.map(g=>g.occ))]};
@@ -808,7 +929,11 @@ function determineOccStrategy(){
   sortedGroups.forEach(g=>{
     const pct=totalProjectSF>0?g.sf/totalProjectSF:0;
     g.pct=Math.round(pct*100);
-    g.isAccessory=g.occ!==dominant&&pct<=0.10;
+    const _chP=(g.rooms||[]).map(r=>r.accessory||'auto');
+    let _accP=g.occ!==dominant&&pct<=0.10;
+    if(_chP.includes('no')) _accP=false;
+    if(_chP.length&&_chP.every(c=>c==='yes')&&g.occ!==dominant&&pct<=0.10) _accP=true;
+    g.isAccessory=_accP;
     g.isPrimary=g.occ===dominant;
   });
   // Build §Table 508.4 separation pairs (for non-primary, non-accessory groups)
@@ -1378,19 +1503,23 @@ function drawTravelOverlay(){
   f.els.filter(e=>e.type==='room').forEach(rm=>{
     const cx=rm.x+rm.w/2,cy=rm.y+rm.h/2;
     let near=null,minD=Infinity;
-    exitPoints.forEach(ep=>{const d=Math.hypot(ep.x-cx,ep.y-cy);if(d<minD){minD=d;near=ep;}});
+    exitPoints.forEach(ep=>{const d=Math.abs(ep.x-cx)+Math.abs(ep.y-cy);if(d<minD){minD=d;near=ep;}});
     if(!near)return;
     const distFt=Math.round(ft(minD)),pass=distFt<=maxTD;
     const col=pass?[0,232,122]:[255,51,85];
     const alpha=pass?0.55:0.75;
+    // Perpendicular (orthogonal) elbow: travel along longer axis first, then turn
+    const horizFirst=Math.abs(near.x-cx)>=Math.abs(near.y-cy);
+    const elbow=horizFirst?{x:near.x,y:cy}:{x:cx,y:near.y};
     C.save();
-    // Thick travel path line
+    // Thick perpendicular travel path (two legs)
     C.strokeStyle=`rgba(${col},${alpha})`;
     C.lineWidth=2.5;
+    C.lineJoin='round';
     C.setLineDash([]);
-    C.beginPath();C.moveTo(cx,cy);C.lineTo(near.x,near.y);C.stroke();
-    // Arrow head at exit end
-    const ang=Math.atan2(near.y-cy,near.x-cx);
+    C.beginPath();C.moveTo(cx,cy);C.lineTo(elbow.x,elbow.y);C.lineTo(near.x,near.y);C.stroke();
+    // Arrow head at exit end, aligned to the final (perpendicular) leg
+    const ang=Math.atan2(near.y-elbow.y,near.x-elbow.x);
     const aLen=10,aWid=5;
     C.fillStyle=`rgba(${col},${alpha+0.2})`;
     C.beginPath();
@@ -1398,8 +1527,8 @@ function drawTravelOverlay(){
     C.lineTo(near.x-aLen*Math.cos(ang-0.4),near.y-aLen*Math.sin(ang-0.4));
     C.lineTo(near.x-aLen*Math.cos(ang+0.4),near.y-aLen*Math.sin(ang+0.4));
     C.closePath();C.fill();
-    // Distance label with background pill
-    const mx=(cx+near.x)/2,my=(cy+near.y)/2;
+    // Distance label with background pill (at the elbow of the perpendicular path)
+    const mx=elbow.x,my=elbow.y;
     const lbl=distFt+"'";
     C.font='bold 9px JetBrains Mono';
     const tw=C.measureText(lbl).width;
@@ -1559,7 +1688,7 @@ function hit(p){
   return null;
 }
 function ptld(p,e){const dx=e.x2-e.x,dy=e.y2-e.y,l2=dx*dx+dy*dy;if(l2===0)return Math.hypot(p.x-e.x,p.y-e.y);const t=Math.max(0,Math.min(1,((p.x-e.x)*dx+(p.y-e.y)*dy)/l2));return Math.hypot(p.x-(e.x+t*dx),p.y-(e.y+t*dy));}
-function defLabel(type,f){const n={exit:'Exit',fw:'FW',stair:'Stair',elev:'Elev',room:'Room',wall:'Wall'};return(n[type]||type)+' '+(f.els.filter(e=>e.type===type).length+1);}
+function defLabel(type,f){const n={exit:'Exit',fw:'FW',stair:'Stair',elev:'Elev',room:'Space',wall:'Wall'};return(n[type]||type)+' '+(f.els.filter(e=>e.type===type).length+1);}
 function removeEl(el){
   const f=F();
   if(el.isMirror){alert('This is an auto-mirrored element. Delete the original on its source floor.');return;}
@@ -1702,10 +1831,12 @@ function buildRoomTable(){
   const OCC=Object.keys(IBC.occLabels),CT=Object.keys(IBC.ctLabel);
   const ss="background:var(--s4);border:1px solid var(--b2);border-radius:3px;color:var(--t1);padding:2px 3px;font-size:.63rem;font-family:'JetBrains Mono',monospace;width:100%";
   host.innerHTML=rooms.map(r=>{
-    const auto=detectRoomType(r.label);
+    const du=detectRoomUse(r.label);
+    const auto=du?du.occ:null;
+    const autoLbl=du?` → ${du.occ} (${du.use})`:'';
     const wf=Math.round(ft(r.w)),hf=Math.round(ft(r.h));
     const occSel=`<select style="${ss}" onchange="setRoomOcc(${r.id},this.value)">
-      <option value="" ${!r.occ?'selected':''}>Auto${auto?' → '+auto:''}</option>
+      <option value="" ${!r.occ?'selected':''}>Auto${autoLbl}</option>
       ${OCC.map(o=>`<option value="${o}" ${r.occ===o?'selected':''}>${o} · ${IBC.occLabels[o]}</option>`).join('')}
     </select>`;
     const ctSel=`<select style="${ss}" onchange="setRoomCT(${r.id},this.value)">
@@ -1763,7 +1894,7 @@ function selEl(id){const f=F();S.sel=f.els.find(e=>e.id===id)||null;if(S.sel)sho
 function rmById(id){const f=F();const el=f.els.find(e=>e.id===id);if(el)removeEl(el);}
 function showProp(e){
   const pc=document.getElementById('prop-card');if(!pc)return;pc.style.display='block';
-  document.getElementById('prop-title').textContent={exit:'Exit Door',fw:'Fire Wall',stair:'Stair',elev:'Elevator',room:'Room',wall:'Wall'}[e.type]||'Element';
+  document.getElementById('prop-title').textContent={exit:'Exit Door',fw:'Fire Wall',stair:'Stair',elev:'Elevator',room:'Space',wall:'Wall'}[e.type]||'Element';
   const pb=document.getElementById('prop-body');if(!pb)return;
   let rows=[];
   if(e.type==='room'){
@@ -1780,7 +1911,7 @@ function editSel(){if(S.sel)editById(S.sel.id);}
 let _eid=null;
 function editById(id){
   const f=F();const e=f.els.find(x=>x.id===id);if(!e)return;_eid=id;
-  const tn={exit:'Exit Door',fw:'Fire Wall',stair:'Stair',elev:'Elevator',room:'Room'};
+  const tn={exit:'Exit Door',fw:'Fire Wall',stair:'Stair',elev:'Elevator',room:'Space'};
   document.getElementById('mdl-t').textContent='Edit '+(tn[e.type]||e.type);
   const inp=(id,lbl,val,type='text',extra='')=>`<div class="fg"><label>${lbl}</label><input id="${id}" type="${type}" value="${val}" style="background:var(--s3);border:1px solid var(--b2);border-radius:4px;color:var(--t1);padding:6px;width:100%;font-family:JetBrains Mono;font-size:.8rem" ${extra}></div>`;
   const sel=(id,lbl,opts,cur)=>`<div class="fg"><label>${lbl}</label><select id="${id}" style="background:var(--s3);border:1px solid var(--b2);border-radius:4px;color:var(--t1);padding:6px;width:100%;font-family:JetBrains Mono;font-size:.8rem">${opts.map(([v,l])=>`<option value="${v}"${cur===v?' selected':''}>${l}</option>`).join('')}</select></div>`;
@@ -1789,6 +1920,7 @@ function editById(id){
     const wf=Math.round(ft(e.w||0)),hf=Math.round(ft(e.h||0));
     const auto=detectRoomType(e.label);
     const rv=getRoomVariables(e,occ(),spr(),S.floor,S.floors.length,1);
+    const accInfo=roomAccessoryInfo(e.id,S.floor);
     // Style for the multi-tab modal
     h=`<style>
       .rm-tabs{display:flex;gap:2px;margin-bottom:10px;border-bottom:1px solid var(--b1);padding-bottom:4px}
@@ -1813,7 +1945,7 @@ function editById(id){
     <!-- IDENTITY -->
     <div class="rm-panel on" id="rp-identity">
       <div class="fg2">${inp('m-rw','Width (ft)',wf,'number','min=1')}${inp('m-rh','Depth (ft)',hf,'number','min=1')}</div>
-      ${inp('m-l2','Room Name / Label',e.label||'')}
+      ${inp('m-l2','Space Name / Label',e.label||'')}
       ${auto?`<div style="font-size:.7rem;color:var(--amb);padding:3px 6px;background:var(--amb2);border-radius:3px;margin-bottom:5px">⚑ Auto-detected from name: <b>${auto}</b> (§303.1)</div>`:''}
       <div class="fg"><label>Occupancy Group (§Table 303.1)</label>
         <select id="m-occ" style="background:var(--s3);border:1px solid var(--b2);border-radius:4px;color:var(--t1);padding:6px;width:100%;font-family:'JetBrains Mono',monospace;font-size:.78rem">
@@ -1859,6 +1991,14 @@ function editById(id){
           <option value="incidental"  ${e.relationship==='incidental'?'selected':''}>Incidental Use (§509)</option>
         </select>
       </div>
+      <div class="fg"><label>Accessory Occupancy (§508.2)</label>
+        <select id="m-accessory" onchange="onAccessoryChange()" style="background:var(--s3);border:1px solid var(--b2);border-radius:4px;color:var(--t1);padding:6px;width:100%;font-family:'JetBrains Mono',monospace;font-size:.78rem">
+          <option value="auto" ${(e.accessory||'auto')==='auto'?'selected':''}>Auto — evaluate §508.2 criteria</option>
+          <option value="yes"  ${e.accessory==='yes'?'selected':''}>Yes — accessory to primary occupancy</option>
+          <option value="no"   ${e.accessory==='no'?'selected':''}>No — treat as separate occupancy</option>
+        </select>
+      </div>
+      <div id="m-accessory-eval">${accessoryEvalHTML(accInfo,e)}</div>
       <div class="rv-row"><span class="rv-lbl">Calculated OL (§1004.5)</span><span class="rv-val">${rv.ol} persons @ ${rv.olf} SF/person</span></div>
       <div class="rv-row"><span class="rv-lbl">Room SF</span><span class="rv-val">${rv.sf.toLocaleString()} SF</span></div>
     </div>
@@ -1997,6 +2137,7 @@ function saveModal(){
   // All 15 room variables
   const mocc=document.getElementById('m-occ');if(mocc)e.occ=mocc.value||null;
   const mrel=document.getElementById('m-rel');if(mrel)e.relationship=mrel.value||'independent';
+  const macy=document.getElementById('m-accessory');if(macy)e.accessory=macy.value||'auto';
   const muser=document.getElementById('m-user');if(muser)e.userType=muser.value||null;
   const mdur=document.getElementById('m-dur');if(mdur)e.duration=mdur.value||null;
   const molr=document.getElementById('m-olrange');if(molr)e.olRange=molr.value||'auto';
@@ -2438,7 +2579,7 @@ function computeFloor(floorIdx){
     f.els.filter(e=>e.type==='room').forEach(r=>{
       const cx=r.x+r.w/2,cy=r.y+r.h/2;
       let near=null,minD=Infinity;
-      exitPoints.forEach(ex=>{const d=Math.hypot(ex.x-cx,ex.y-cy);if(d<minD){minD=d;near=ex;}});
+      exitPoints.forEach(ex=>{const d=Math.abs(ex.x-cx)+Math.abs(ex.y-cy);if(d<minD){minD=d;near=ex;}});
       if(!near)return;
       const distFt=Math.round(ft(minD));if(distFt>maxActual)maxActual=distFt;
       travelData.push({label:r.label||'Room',distFt,pass:distFt<=maxTD,exitLabel:near.label||'Exit'});
